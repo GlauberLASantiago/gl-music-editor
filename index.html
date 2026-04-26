@@ -106,8 +106,37 @@
             stroke: #ef4444 !important;
         }
 
-        /* Ocultar UI do ABCJS Player */
-        .abcjs-inline-audio { display: none !important; }
+        /* Player ABCJS integrado na toolbar */
+        .abcjs-inline-audio {
+            display: flex !important;
+            align-items: center;
+            gap: 4px;
+            background: transparent !important;
+            border: none !important;
+            padding: 0 !important;
+        }
+        .abcjs-inline-audio .abcjs-btn {
+            height: 28px !important;
+            min-width: 28px !important;
+            border-radius: 4px !important;
+            background: transparent !important;
+            border: 1px solid transparent !important;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 0 4px !important;
+        }
+        .abcjs-inline-audio .abcjs-btn:hover { background: #e5e7eb !important; }
+        .abcjs-inline-audio .abcjs-btn svg { width: 14px; height: 14px; }
+        .abcjs-inline-audio .abcjs-tempo-wrapper { display: none !important; }
+        .abcjs-inline-audio .abcjs-progress-indicator { display: none !important; }
+        #audio-status {
+            font-size: 10px;
+            color: #6b7280;
+            padding: 0 4px;
+            white-space: nowrap;
+        }
     </style>
 </head>
 <body class="h-screen flex flex-col overflow-hidden text-sm">
@@ -129,9 +158,9 @@
 
     <div class="bg-gray-50 border-b border-gray-300 flex flex-wrap items-center p-1 select-none shadow-sm z-20">
         
-        <div class="toolbar-group">
-            <button id="btn-play" class="tool-btn text-green-600 hover:text-green-700" title="Tocar (Barra de Espaço)"><span class="text-lg">▶</span></button>
+        <div class="toolbar-group items-center">
             <div id="audio-controls"></div>
+            <span id="audio-status" class="text-gray-400 text-[10px]">A carregar...</span>
         </div>
 
         <div class="toolbar-group">
@@ -599,25 +628,40 @@
         initAudio(visualObj);
     }
 
-    // BUG FIX: inicialização de áudio separada e idempotente
+    // Inicialização de áudio — segue o padrão oficial da documentação ABCJS
+    // Ref: https://docs.abcjs.net/audio/synthesized-sound
     function initAudio(visualObj) {
-        if (!ABCJS.synth.supportsAudio()) return;
+        const statusEl = document.getElementById('audio-status');
+
+        if (!ABCJS.synth.supportsAudio()) {
+            if (statusEl) statusEl.innerText = '⚠ Sem suporte de áudio';
+            return;
+        }
         if (!visualObj || !visualObj[0]) return;
 
+        // O SynthController é criado apenas uma vez e reutilizado
         if (!synthControl) {
             synthControl = new ABCJS.synth.SynthController();
             synthControl.load("#audio-controls", null, {
-                displayLoop: false, displayRestart: false,
-                displayPlay: true, displayProgress: false
+                displayLoop: true,
+                displayRestart: true,
+                displayPlay: true,
+                displayProgress: true,
+                displayWarp: false
             });
         }
 
-        const createSynth = new ABCJS.synth.CreateSynth();
-        createSynth.init({ visualObj: visualObj[0] }).then(() => {
-            synthControl.setTune(visualObj[0], false);
-        }).catch(err => {
-            console.warn("Erro ao inicializar áudio:", err);
-        });
+        if (statusEl) statusEl.innerText = 'A preparar...';
+
+        // Padrão correto: CreateSynth → init → setTune (que faz o prime internamente)
+        const midiBuffer = new ABCJS.synth.CreateSynth();
+        midiBuffer.init({ visualObj: visualObj[0] })
+            .then(() => synthControl.setTune(visualObj[0], false))
+            .then(() => { if (statusEl) statusEl.innerText = ''; })
+            .catch(err => {
+                console.warn("Erro de áudio:", err);
+                if (statusEl) statusEl.innerText = '⚠ Erro de áudio';
+            });
     }
 
     function highlightSelection() {
@@ -817,9 +861,10 @@
         activeStaffId = 1;
         nextStaffId = 2;
         synthControl = null; // BUG FIX: força reinicialização do player
-
         document.getElementById('score-paper').innerHTML = '';
         document.getElementById('audio-controls').innerHTML = '';
+        const statusEl = document.getElementById('audio-status');
+        if (statusEl) statusEl.innerText = 'A carregar...';
 
         document.getElementById('song-title').value = currentTitle;
         document.getElementById('song-composer').value = currentComposer;
@@ -918,7 +963,12 @@
         if (['INPUT', 'TEXTAREA', 'SELECT'].includes(e.target.tagName)) return;
         const key = e.key.toLowerCase();
 
-        if (key === ' ') { e.preventDefault(); document.getElementById('btn-play').click(); }
+        if (key === ' ') {
+            e.preventDefault();
+            const playBtn = document.querySelector('#audio-controls .abcjs-play');
+            if (playBtn) playBtn.click();
+            else showToast("Adicione notas e aguarde o áudio carregar.");
+        }
         else if (key >= '1' && key <= '7') setDuration(parseInt(key));
         else if (['a','b','c','d','e','f','g','0'].includes(key)) addNote(key);
         else if (e.key === 'ArrowUp')    { e.preventDefault(); (e.ctrlKey||e.metaKey) ? changeOctave(1)  : transposeSelectedNote(1); }
@@ -943,23 +993,8 @@
     document.getElementById('btn-save').addEventListener('click', saveScore);
     document.getElementById('btn-export-html').addEventListener('click', exportHtml);
 
-    document.getElementById('btn-play').addEventListener('click', () => {
-        // BUG FIX: tenta clicar no botão gerado pelo ABCJS; mostra aviso útil se não existir
-        const playBtn = document.querySelector('.abcjs-inline-audio .abcjs-play, .abcjs-play');
-        if (playBtn) {
-            playBtn.click();
-        } else if (lastVisualObj && lastVisualObj[0]) {
-            // Tenta reinicializar e aguarda
-            initAudio(lastVisualObj);
-            setTimeout(() => {
-                const btn = document.querySelector('.abcjs-play');
-                if (btn) btn.click();
-                else showToast("Aguarde um momento e tente de novo.");
-            }, 500);
-        } else {
-            showToast("Adicione notas para poder tocar a música!");
-        }
-    });
+    // Barra de espaço → clica no botão de play do ABCJS diretamente
+    // (o botão nativo do ABCJS já está visível na toolbar)
 
     document.getElementById('btn-open').addEventListener('click', () => document.getElementById('file-upload').click());
 
@@ -985,6 +1020,8 @@
                 // Reseta o player
                 synthControl = null;
                 document.getElementById('audio-controls').innerHTML = '';
+                const statusEl = document.getElementById('audio-status');
+                if (statusEl) statusEl.innerText = 'A carregar...';
 
                 document.getElementById('song-title').value = currentTitle;
                 document.getElementById('song-composer').value = currentComposer;
