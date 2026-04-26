@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>GL "Music Editor"</title>
+    <title>GL Music Editor</title>
     <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🎼</text></svg>">
     
     <script src="https://cdn.tailwindcss.com"></script>
@@ -148,7 +148,7 @@
 
     <header class="bg-gray-800 text-gray-300 px-4 flex justify-between items-center select-none text-xs z-50 relative">
         <div class="flex items-center gap-6">
-            <span class="font-bold text-white flex items-center gap-2 py-2 text-sm">🎼 GL "Music Editor"</span>
+            <span class="font-bold text-white flex items-center gap-2 py-2 text-sm">🎼 GL Music Editor</span>
             
             <div class="relative group">
                 <div class="hover:text-white cursor-pointer py-2 px-1">Ficheiro</div>
@@ -222,9 +222,8 @@
         </div>
 
         <div class="toolbar-group">
-            <button id="btn-acc-flat" class="tool-btn" data-shortcut="Bemol">♭</button>
-            <button id="btn-acc-nat" class="tool-btn" data-shortcut="Bequadro">♮</button>
-            <button id="btn-acc-sharp" class="tool-btn" data-shortcut="Sustenido">♯</button>
+            <button id="btn-acc-down" class="tool-btn" data-shortcut="↓">♭</button>
+            <button id="btn-acc-up" class="tool-btn" data-shortcut="↑">♯</button>
             <div class="w-px h-4 bg-gray-300 mx-1"></div>
             <button id="btn-oct-down" class="tool-btn" data-shortcut="Ctrl+↓">Oitava -</button>
             <span id="octave-display" class="font-mono text-xs text-gray-500 px-1 w-12 text-center">Nrml</span>
@@ -411,6 +410,14 @@
     const durMap     = { 1: "4", 2: "2", 3: "", 4: "/2", 5: "/4", 6: "/8", 7: "/16" };
     const durTicks   = { 1: 64, 2: 32, 3: 16, 4: 8, 5: 4, 6: 2, 7: 1 };
     const accMap     = { 0: "__", 1: "_", 2: "=", 3: "", 4: "^", 5: "^^" };
+    const basePitches = { 'c':0,'d':2,'e':4,'f':5,'g':7,'a':9,'b':11 };
+    const accOffsets  = { 0:-2, 1:-1, 2:0, 3:0, 4:1, 5:2 };
+
+    // Correção: Mapeamento de acidentes naturais das Armaduras de Clave
+    const keyAccidentals = {
+        'C': {}, 'G': {'f':4}, 'D': {'f':4,'c':4}, 'A': {'f':4,'c':4,'g':4}, 'E': {'f':4,'c':4,'g':4,'d':4},
+        'F': {'b':1}, 'Bb': {'b':1,'e':1}, 'Eb': {'b':1,'e':1,'a':1}, 'Ab': {'b':1,'e':1,'a':1,'d':1}
+    };
 
     // ─── HELPERS ─────────────────────────────────────────────────────────────────
     function getActiveStaff() { return staffs.find(s => s.id === activeStaffId); }
@@ -552,17 +559,15 @@
             abc += `V:${s.id} clef=${s.clef} name="${s.name}"\n`;
             if (s.type === 'percussion') {
                 abc += `%%MIDI channel 10\n`;
-                // Mapeamento visual das notas da clave de Fá para as peças de Bateria Padrão GM
-                abc += `%%MIDI drummap A, 41\n`; // A, (1º espaço) = Floor Tom
-                abc += `%%MIDI drummap B, 41\n`;
-                abc += `%%MIDI drummap C 36\n`;  // C (2º espaço) = Bass Drum (Kick)
-                abc += `%%MIDI drummap D 47\n`;  // D (3º linha) = Mid Tom
-                abc += `%%MIDI drummap E 38\n`;  // E (3º espaço) = Snare (Caixa)
-                abc += `%%MIDI drummap F 45\n`;  // F (4º linha) = Low Tom
-                abc += `%%MIDI drummap G 42\n`;  // G (4º espaço) = Closed Hi-Hat
-                abc += `%%MIDI drummap A 46\n`;  // A (5º linha) = Open Hi-Hat
-                abc += `%%MIDI drummap B 51\n`;  // B (acima da pauta) = Ride Cymbal
-                abc += `%%MIDI drummap c 49\n`;  // c (linha suplementar) = Crash Cymbal
+                // Mapeamento correto para as peças GM (Canal 10) escrito na Clave de Fá
+                abc += `%%MIDI drummap C 36\n`;  // C (2º espaço) = Bumbo (Kick)
+                abc += `%%MIDI drummap D 47\n`;  // D (3ª linha) = Mid Tom
+                abc += `%%MIDI drummap E 38\n`;  // E (3º espaço) = Caixa (Snare)
+                abc += `%%MIDI drummap F 45\n`;  // F (4ª linha) = Low Tom
+                abc += `%%MIDI drummap G 42\n`;  // G (4º espaço) = Chimbal Fechado
+                abc += `%%MIDI drummap A 46\n`;  // A (5ª linha) = Chimbal Aberto
+                abc += `%%MIDI drummap B 51\n`;  // B (acima da pauta) = Prato de Condução
+                abc += `%%MIDI drummap c 49\n`;  // c (linha suplementar superior) = Prato de Ataque
             }
         }
 
@@ -748,11 +753,12 @@
         let pitchStr = getAbcPitch(item, {});
         
         let abc = `X:1\nL:1/4\nK:${currentKey}\n`;
+        abc += `V:1 clef=${clef}\n`;
         if (isPerc) {
             abc += `%%MIDI channel 10\n`;
-            abc += `%%MIDI drummap A, 41\n%%MIDI drummap B, 41\n%%MIDI drummap C 36\n%%MIDI drummap D 47\n%%MIDI drummap E 38\n%%MIDI drummap F 45\n%%MIDI drummap G 42\n%%MIDI drummap A 46\n%%MIDI drummap B 51\n%%MIDI drummap c 49\n`;
+            abc += `%%MIDI drummap C 36\n%%MIDI drummap D 47\n%%MIDI drummap E 38\n%%MIDI drummap F 45\n%%MIDI drummap G 42\n%%MIDI drummap A 46\n%%MIDI drummap B 51\n%%MIDI drummap c 49\n`;
         }
-        abc += `V:1 clef=${clef}\n${pitchStr}\n`;
+        abc += `${pitchStr}\n`;
         
         let visualObj = ABCJS.renderAbc("*", abc)[0];
         feedbackSynth = new ABCJS.synth.CreateSynth();
@@ -780,7 +786,7 @@
         });
     }
 
-    // ─── LÓGICA MUSICAL DIATÔNICA E ACIDENTES ESPECÍFICOS ───────────────────────
+    // ─── LÓGICA MUSICAL (TRANSPOSIÇÃO CROMÁTICA CORRIGIDA) ───────────────────────
     function moveSelection(delta, isShiftPressed = false) {
         const staff = getActiveStaff();
         if (staff.composition.length === 0) return;
@@ -804,51 +810,62 @@
         simulateBtnPress(delta > 0 ? '#btn-sel-next' : '#btn-sel-prev');
     }
 
-    // NOVA FUNÇÃO: Move a nota no pentagrama visualmente (Dó para Ré, etc)
-    function movePitchDiatonic(delta) {
+    function transposeSelectedNote(delta) {
         const staff = getActiveStaff();
         if (staff.selectedIndex < 0 || staff.selectedIndex >= staff.composition.length) return;
 
         const ancIdx = staff.selectionAnchor !== -1 ? staff.selectionAnchor : staff.selectedIndex;
         const minSel = Math.min(staff.selectedIndex, ancIdx);
         const maxSel = Math.max(staff.selectedIndex, ancIdx);
-
-        const diatonicScale = ['c','d','e','f','g','a','b'];
 
         for (let i = minSel; i <= maxSel; i++) {
             let item = staff.composition[i];
             if (item.note === "0") continue;
 
-            let idx = diatonicScale.indexOf(item.note);
-            let newIdx = idx + delta;
+            let baseVal = basePitches[item.note] || 0;
+            let accOffset = accOffsets[item.accidentalIndex] || 0;
             
-            let octDelta = Math.floor(newIdx / 7);
-            newIdx = ((newIdx % 7) + 7) % 7;
-
-            item.note = diatonicScale[newIdx];
-            item.octave = Math.max(-2, Math.min(3, item.octave + octDelta));
-            item.accidentalIndex = 3; // Remove o acidente forçado ao mover de linha/espaço
-        }
-
-        updateScore();
-        if (delta !== 0) playSingleNoteFeedback(staff.composition[staff.selectedIndex], staff.type === 'percussion', staff.clef);
-    }
-
-    // NOVA FUNÇÃO: Aplica um acidente específico (♭, ♮, ♯)
-    function setAccidental(accIndex) {
-        const staff = getActiveStaff();
-        if (staff.selectedIndex < 0 || staff.selectedIndex >= staff.composition.length) return;
-
-        const ancIdx = staff.selectionAnchor !== -1 ? staff.selectionAnchor : staff.selectedIndex;
-        const minSel = Math.min(staff.selectedIndex, ancIdx);
-        const maxSel = Math.max(staff.selectedIndex, ancIdx);
-
-        for (let i = minSel; i <= maxSel; i++) {
-            let item = staff.composition[i];
-            if (item.note !== "0") {
-                item.accidentalIndex = accIndex;
+            // CORREÇÃO: Reconstruir o tom absoluto baseado na armadura se a nota não tiver acidente explícito
+            if (item.accidentalIndex === 3) {
+                let keyAccs = keyAccidentals[currentKey] || {};
+                let expectedAcc = keyAccs[item.note] || 3;
+                if (expectedAcc === 4) accOffset = 1;  // Sustenido pela armadura
+                if (expectedAcc === 1) accOffset = -1; // Bemol pela armadura
             }
+
+            let absolutePitch = baseVal + (item.octave * 12) + accOffset + delta;
+
+            let newOctave = Math.floor(absolutePitch / 12);
+            newOctave = Math.max(-2, Math.min(3, newOctave));
+
+            let semitone = ((absolutePitch % 12) + 12) % 12;
+
+            let noteMap = {
+                0:  ['c',3], 1:  delta>0?['c',4]:['d',1],
+                2:  ['d',3], 3:  delta>0?['d',4]:['e',1],
+                4:  ['e',3], 5:  ['f',3],
+                6:  delta>0?['f',4]:['g',1], 7: ['g',3],
+                8:  delta>0?['g',4]:['a',1], 9: ['a',3],
+                10: delta>0?['a',4]:['b',1], 11:['b',3]
+            };
+
+            let [newNote, newAcc] = noteMap[semitone] || ['c', 3];
+
+            // CORREÇÃO: Conferir a nova nota com a armadura para forçar o bequadro se necessário
+            let keyAccs = keyAccidentals[currentKey] || {};
+            let expectedAcc = keyAccs[newNote] || 3;
+
+            if (newAcc === 3 && expectedAcc !== 3) {
+                newAcc = 2; // É natural, mas a armadura diz sustenido/bemol. Força o bequadro!
+            } else if (newAcc === expectedAcc) {
+                newAcc = 3; // Igual à armadura. Esconde o acidente.
+            }
+
+            item.note = newNote;
+            item.octave = newOctave;
+            item.accidentalIndex = newAcc;
         }
+
         updateScore();
         playSingleNoteFeedback(staff.composition[staff.selectedIndex], staff.type === 'percussion', staff.clef);
     }
@@ -1011,7 +1028,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>${safeTitle} - Partitura Interativa</title>
+    <title>${safeTitle} - GL Music Editor</title>
     <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🎼</text></svg>">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/abcjs/6.2.2/abcjs-basic-min.js"><\/script>
     <link rel="stylesheet" type="text/css" href="https://cdnjs.cloudflare.com/ajax/libs/abcjs/6.2.2/abcjs-audio.min.css">
@@ -1082,7 +1099,7 @@
         }
     }
 
-    // ─── LISTENERS DO MENU SUPERIOR ──────────────────────────────────────────────
+    // ─── LISTENERS ──────────────────────────────────────────────────────────────
     document.getElementById('menu-new').addEventListener('click', newScore);
     document.getElementById('menu-open').addEventListener('click', () => document.getElementById('file-upload').click());
     document.getElementById('menu-save').addEventListener('click', saveScore);
@@ -1119,7 +1136,6 @@
         }
     });
 
-    // ─── LÓGICA DO MODAL DE PROPRIEDADES ─────────────────────────────────────────
     const propsModal = document.getElementById('props-modal');
     document.getElementById('menu-props').addEventListener('click', () => propsModal.classList.remove('hidden'));
     document.getElementById('btn-close-props').addEventListener('click', () => propsModal.classList.add('hidden'));
@@ -1145,7 +1161,6 @@
         document.getElementById('bpm-val').innerText = currentBPM;
     });
 
-    // ─── LÓGICA DA PALETA E TECLADO ──────────────────────────────────────────────
     document.getElementById('staff-selector').addEventListener('change', e => {
         activeStaffId = parseInt(e.target.value);
         updateStaffUI();
@@ -1165,10 +1180,9 @@
         updateScore(); 
     });
 
-    // Eventos dos botões de Acidentes
-    document.getElementById('btn-acc-flat').addEventListener('click', () => { setAccidental(1); simulateBtnPress('#btn-acc-flat'); });
-    document.getElementById('btn-acc-nat').addEventListener('click', () => { setAccidental(2); simulateBtnPress('#btn-acc-nat'); });
-    document.getElementById('btn-acc-sharp').addEventListener('click', () => { setAccidental(4); simulateBtnPress('#btn-acc-sharp'); });
+    // Restaurando a lógica das setas/botões de acidentes
+    document.getElementById('btn-acc-down').addEventListener('click', () => { transposeSelectedNote(-1); simulateBtnPress('#btn-acc-down'); });
+    document.getElementById('btn-acc-up').addEventListener('click', () => { transposeSelectedNote(1); simulateBtnPress('#btn-acc-up'); });
 
     window.addEventListener('keydown', (e) => {
         if (['INPUT', 'TEXTAREA', 'SELECT'].includes(e.target.tagName)) return;
@@ -1177,8 +1191,8 @@
         if (key === ' ') { e.preventDefault(); playAudio(); }
         else if (key >= '1' && key <= '7') setDuration(parseInt(key));
         else if (['a','b','c','d','e','f','g','0'].includes(key)) addNote(key);
-        else if (e.key === 'ArrowUp')    { e.preventDefault(); (e.ctrlKey||e.metaKey) ? changeOctave(1)  : movePitchDiatonic(1); }
-        else if (e.key === 'ArrowDown')  { e.preventDefault(); (e.ctrlKey||e.metaKey) ? changeOctave(-1) : movePitchDiatonic(-1); }
+        else if (e.key === 'ArrowUp')    { e.preventDefault(); (e.ctrlKey||e.metaKey) ? changeOctave(1)  : transposeSelectedNote(1); }
+        else if (e.key === 'ArrowDown')  { e.preventDefault(); (e.ctrlKey||e.metaKey) ? changeOctave(-1) : transposeSelectedNote(-1); }
         else if (e.key === 'ArrowLeft')  { e.preventDefault(); moveSelection(-1, e.shiftKey); }
         else if (e.key === 'ArrowRight') { e.preventDefault(); moveSelection(1, e.shiftKey); }
         else if (e.key === 'Backspace' || e.key === 'Delete') { e.preventDefault(); deleteNote(); }
