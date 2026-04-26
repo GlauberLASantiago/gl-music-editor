@@ -158,9 +158,10 @@
 
     <div class="bg-gray-50 border-b border-gray-300 flex flex-wrap items-center p-1 select-none shadow-sm z-20">
         
-        <div class="toolbar-group items-center">
+        <div class="toolbar-group items-center gap-2">
+            <button id="btn-play" class="tool-btn text-green-700 font-bold px-3" title="Tocar (Barra de Espaço)">▶ Play</button>
             <div id="audio-controls"></div>
-            <span id="audio-status" class="text-gray-400 text-[10px]">A carregar...</span>
+            <span id="audio-status" class="text-gray-400 text-[10px]">▶ Pronto para tocar</span>
         </div>
 
         <div class="toolbar-group">
@@ -615,53 +616,101 @@
         const abcString = buildAbcString();
         document.getElementById('hidden-abc').value = abcString;
 
-        const visualObj = ABCJS.renderAbc("score-paper", abcString, {
+        lastVisualObj = ABCJS.renderAbc("score-paper", abcString, {
             responsive: "resize",
             add_classes: true,
             paddingtop: 30,
             paddingbottom: 30
         });
 
-        lastVisualObj = visualObj; // BUG FIX: guarda referência global
-
         highlightSelection();
-        initAudio(visualObj);
+        // Marca o áudio como desatualizado mas NÃO reconstrói automaticamente.
+        // O áudio só é (re)construído quando o utilizador clica em Play.
+        audioReady = false;
+        audioBuilding = false;
+        if (synthControl) synthControl.disable(true); // desativa botões até novo Play
+        setAudioStatus('▶ Pronto para tocar');
     }
 
-    // Inicialização de áudio — segue o padrão oficial da documentação ABCJS
-    // Ref: https://docs.abcjs.net/audio/synthesized-sound
-    function initAudio(visualObj) {
-        const statusEl = document.getElementById('audio-status');
+    // ─── SISTEMA DE ÁUDIO ────────────────────────────────────────────────────────
+    // Separado completamente da edição para não interromper builds em curso.
+    // O SynthController é criado uma vez e vive para sempre.
+    // O CreateSynth é recriado cada vez que o utilizador clica Play (após edições).
 
+    let audioReady = false;
+    let audioBuilding = false;
+
+    function setAudioStatus(msg) {
+        const el = document.getElementById('audio-status');
+        if (el) el.innerText = msg;
+    }
+
+    function ensureController() {
+        if (synthControl) return;
+        if (!ABCJS.synth.supportsAudio()) return;
+        synthControl = new ABCJS.synth.SynthController();
+        synthControl.load("#audio-controls", null, {
+            displayLoop: true,
+            displayRestart: true,
+            displayPlay: true,
+            displayProgress: true,
+            displayWarp: false
+        });
+    }
+
+    // Chamada quando o utilizador quer tocar — constrói o buffer se necessário,
+    // depois dispara play(). Segue o padrão exato da documentação oficial.
+    function playAudio() {
         if (!ABCJS.synth.supportsAudio()) {
-            if (statusEl) statusEl.innerText = '⚠ Sem suporte de áudio';
+            showToast("Áudio não suportado neste browser.");
             return;
         }
-        if (!visualObj || !visualObj[0]) return;
-
-        // O SynthController é criado apenas uma vez e reutilizado
-        if (!synthControl) {
-            synthControl = new ABCJS.synth.SynthController();
-            synthControl.load("#audio-controls", null, {
-                displayLoop: true,
-                displayRestart: true,
-                displayPlay: true,
-                displayProgress: true,
-                displayWarp: false
-            });
+        if (!lastVisualObj || !lastVisualObj[0]) {
+            showToast("Adicione notas à partitura primeiro.");
+            return;
         }
 
-        if (statusEl) statusEl.innerText = 'A preparar...';
+        ensureController();
 
-        // Padrão correto: CreateSynth → init → setTune (que faz o prime internamente)
+        if (audioReady) {
+            // Buffer já construído — play/pause direto via API programática
+            synthControl.play();
+            return;
+        }
+
+        if (audioBuilding) {
+            showToast("A preparar áudio, aguarde...");
+            return;
+        }
+
+        audioBuilding = true;
+        setAudioStatus('⏳ A carregar notas...');
+
         const midiBuffer = new ABCJS.synth.CreateSynth();
-        midiBuffer.init({ visualObj: visualObj[0] })
-            .then(() => synthControl.setTune(visualObj[0], false))
-            .then(() => { if (statusEl) statusEl.innerText = ''; })
+        midiBuffer.init({ visualObj: lastVisualObj[0] })
+            .then(() => synthControl.setTune(lastVisualObj[0], true)) // true = userAction, buffer criado imediatamente
+            .then(() => {
+                audioReady = true;
+                audioBuilding = false;
+                setAudioStatus('');
+                synthControl.disable(false); // reabilita os botões do player
+                synthControl.play();
+            })
             .catch(err => {
+                audioBuilding = false;
+                audioReady = false;
+                setAudioStatus('⚠ Erro de áudio');
                 console.warn("Erro de áudio:", err);
-                if (statusEl) statusEl.innerText = '⚠ Erro de áudio';
+                showToast("Erro ao preparar áudio: " + (err.message || err));
             });
+    }
+
+    function resetAudioState() {
+        audioReady = false;
+        audioBuilding = false;
+        synthControl = null;
+        document.getElementById('audio-controls').innerHTML = '';
+        setAudioStatus('▶ Pronto para tocar');
     }
 
     function highlightSelection() {
@@ -860,11 +909,8 @@
         staffs = [new Staff(1, 'standard')];
         activeStaffId = 1;
         nextStaffId = 2;
-        synthControl = null; // BUG FIX: força reinicialização do player
+        resetAudioState();
         document.getElementById('score-paper').innerHTML = '';
-        document.getElementById('audio-controls').innerHTML = '';
-        const statusEl = document.getElementById('audio-status');
-        if (statusEl) statusEl.innerText = 'A carregar...';
 
         document.getElementById('song-title').value = currentTitle;
         document.getElementById('song-composer').value = currentComposer;
@@ -965,9 +1011,7 @@
 
         if (key === ' ') {
             e.preventDefault();
-            const playBtn = document.querySelector('#audio-controls .abcjs-play');
-            if (playBtn) playBtn.click();
-            else showToast("Adicione notas e aguarde o áudio carregar.");
+            playAudio();
         }
         else if (key >= '1' && key <= '7') setDuration(parseInt(key));
         else if (['a','b','c','d','e','f','g','0'].includes(key)) addNote(key);
@@ -993,8 +1037,7 @@
     document.getElementById('btn-save').addEventListener('click', saveScore);
     document.getElementById('btn-export-html').addEventListener('click', exportHtml);
 
-    // Barra de espaço → clica no botão de play do ABCJS diretamente
-    // (o botão nativo do ABCJS já está visível na toolbar)
+    document.getElementById('btn-play').addEventListener('click', playAudio);
 
     document.getElementById('btn-open').addEventListener('click', () => document.getElementById('file-upload').click());
 
@@ -1018,10 +1061,7 @@
                 nextStaffId = data.nextStaffId || 2;
 
                 // Reseta o player
-                synthControl = null;
-                document.getElementById('audio-controls').innerHTML = '';
-                const statusEl = document.getElementById('audio-status');
-                if (statusEl) statusEl.innerText = 'A carregar...';
+                resetAudioState();
 
                 document.getElementById('song-title').value = currentTitle;
                 document.getElementById('song-composer').value = currentComposer;
