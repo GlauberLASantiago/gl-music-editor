@@ -106,7 +106,6 @@
             stroke: #ef4444 !important;
         }
 
-        /* Player ABCJS integrado na toolbar */
         .abcjs-inline-audio {
             display: flex !important;
             align-items: center;
@@ -281,7 +280,7 @@
                         <option value="bass">Fá (Graves)</option>
                         <option value="alto">Dó (3ª linha - Viola)</option>
                         <option value="tenor">Dó (4ª linha)</option>
-                        <option value="perc" disabled>Percussão</option>
+                        <option value="perc">Percussão</option>
                     </select>
                 </div>
             </div>
@@ -328,7 +327,8 @@
             this.type = type;
             this.name = type === 'percussion' ? `Percussão ${id}` : `Melodia ${id}`;
             this.composition = [];
-            this.clef = type === 'percussion' ? 'perc' : 'treble';
+            // FIX: Pautas de percussão nascem como Clave de Fá por padrão
+            this.clef = type === 'percussion' ? 'bass' : 'treble';
             this.selectedIndex = -1;
             this.selectionAnchor = -1;
             this.currentOctave = 0;
@@ -338,7 +338,8 @@
             const s = new Staff(plain.id, plain.type);
             s.name = plain.name;
             s.composition = plain.composition || [];
-            s.clef = plain.clef;
+            // Migração: se um arquivo antigo tinha clef='perc', passa para 'bass' automaticamente
+            s.clef = (plain.type === 'percussion' && plain.clef === 'perc') ? 'bass' : plain.clef;
             s.selectedIndex = plain.selectedIndex !== undefined ? plain.selectedIndex : -1;
             s.selectionAnchor = plain.selectionAnchor !== undefined ? plain.selectionAnchor : -1;
             s.currentOctave = plain.currentOctave !== undefined ? plain.currentOctave : 0;
@@ -368,6 +369,9 @@
     let ticksPerMeasure = 64;
     let ticksForBeaming = 16;
     let ticksPerVisualBeat = 16;
+
+    // Sintetizador auxiliar apenas para tocar a nota isolada ao clicar
+    let feedbackSynth = null; 
 
     // ─── DICIONÁRIOS ─────────────────────────────────────────────────────────────
     const durMap     = { 1: "4", 2: "2", 3: "", 4: "/2", 5: "/4", 6: "/8", 7: "/16" };
@@ -479,7 +483,8 @@
 
         const clefSelect = document.getElementById('clef-type');
         clefSelect.value = active.clef;
-        clefSelect.disabled = (active.type === 'percussion');
+        // FIX: Não desabilitar o select para percussão (permite trocar se quiser)
+        clefSelect.disabled = false; 
 
         document.getElementById('btn-remove-staff').classList.toggle('hidden', staffs.length <= 1);
 
@@ -682,6 +687,28 @@
             });
     }
 
+    // FIX: Tocar a nota imediatamente após inserir (Feedback)
+    function playSingleNoteFeedback(item, isPerc, clef) {
+        if (!ABCJS.synth.supportsAudio() || audioBuilding) return;
+        
+        if (feedbackSynth) {
+            feedbackSynth.stop(); // Interrompe a anterior se for inserida rápida demais
+        }
+        
+        let pitchStr = getAbcPitch(item, {});
+        // Constrói um ABC apenas para essa nota
+        let abc = `X:1\nL:1/4\nK:${currentKey}\n${isPerc ? '%%MIDI channel 10\n' : ''}V:1 clef=${clef}\n${pitchStr}\n`;
+        
+        let visualObj = ABCJS.renderAbc("*", abc)[0]; // "*" previne que desenhe na tela
+        feedbackSynth = new ABCJS.synth.CreateSynth();
+        
+        feedbackSynth.init({ visualObj: visualObj }).then(() => {
+            return feedbackSynth.prime();
+        }).then(() => {
+            feedbackSynth.start();
+        }).catch(err => console.warn("Erro no som da nota:", err));
+    }
+
     function resetAudioState() {
         audioReady = false;
         audioBuilding = false;
@@ -774,19 +801,27 @@
             return;
         }
 
-        staff.composition.push({
+        const newItem = {
             note: noteLetter,
             octave: staff.currentOctave,
             dur: currentDuration,
             ticks: noteTicks,
             accidentalIndex: 3
-        });
+        };
+
+        staff.composition.push(newItem);
 
         staff.selectedIndex = staff.composition.length - 1;
         staff.selectionAnchor = staff.selectedIndex;
 
         updateScore();
         updateMeasureUI();
+        
+        // FIX: Tocar a nota
+        if (noteLetter !== "0") {
+            playSingleNoteFeedback(newItem, staff.type === 'percussion', staff.clef);
+        }
+
         simulateBtnPress(`[data-note="${noteLetter}"]`);
     }
 
@@ -987,7 +1022,7 @@
                         window.sc.setTune(visualObj[0], true); // Clique triplo = Tocar do Início
                     }
                     clickCount = 0;
-                }, 350); // 350ms para aguardar a sequência de cliques
+                }, 350);
             }
         });
     <\/script>
