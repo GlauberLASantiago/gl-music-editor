@@ -334,7 +334,6 @@
             this.currentOctave = 0;
         }
 
-        // BUG FIX: método estático para hidratar objetos carregados do JSON
         static hydrate(plain) {
             const s = new Staff(plain.id, plain.type);
             s.name = plain.name;
@@ -350,7 +349,7 @@
     // ─── ESTADO ──────────────────────────────────────────────────────────────────
     let currentDuration = 3;
     let synthControl = null;
-    let lastVisualObj = null; // BUG FIX: mantém referência para o player
+    let lastVisualObj = null;
 
     let staffs = [new Staff(1, 'standard')];
     let activeStaffId = 1;
@@ -371,7 +370,6 @@
     let ticksPerVisualBeat = 16;
 
     // ─── DICIONÁRIOS ─────────────────────────────────────────────────────────────
-    // BUG FIX: durMap corrigido — colcheia usa "/2" em L:1/4, seminínima não usa sufixo
     const durMap     = { 1: "4", 2: "2", 3: "", 4: "/2", 5: "/4", 6: "/8", 7: "/16" };
     const durTicks   = { 1: 64, 2: 32, 3: 16, 4: 8, 5: 4, 6: 2, 7: 1 };
     const accMap     = { 0: "__", 1: "_", 2: "=", 3: "", 4: "^", 5: "^^" };
@@ -402,13 +400,6 @@
         }, 3000);
     }
 
-    // BUG FIX: getAbcPitch — oitava negativa usava vírgulas invertidas
-    // ABC notation: C, = uma oitava abaixo; C,, = duas oitavas abaixo
-    // oitava 0 → C (oitava central, médio para treble)
-    // oitava 1 → c (uma acima)
-    // oitava 2 → c' (duas acima)
-    // oitava -1 → C, (uma abaixo)
-    // oitava -2 → C,, (duas abaixo)
     function getAbcPitch(item, measureAccidentals) {
         if (item.note === "0") return "z";
 
@@ -426,7 +417,6 @@
         if (measureAccidentals) {
             const noteKey = item.note + item.octave;
             if (item.accidentalIndex === 3) {
-                // Se a nota é natural mas houve acidente diferente no mesmo compasso, força bequadro
                 if (measureAccidentals[noteKey] !== undefined && measureAccidentals[noteKey] !== 3) {
                     acc = "=";
                 }
@@ -444,7 +434,6 @@
         return totalTicks % ticksPerMeasure;
     }
 
-    // BUG FIX: removido o setTimeout de flash que causava race condition
     function updateMeasureUI() {
         const staff = getActiveStaff();
         if (!staff) return;
@@ -456,7 +445,6 @@
         const fillEl = document.getElementById('measure-fill');
         const textEl = document.getElementById('measure-text');
 
-        // Compasso exatamente cheio
         if (currentTicks === 0 && totalTicks > 0) {
             fillEl.style.width = '100%';
             fillEl.classList.add('bg-green-500');
@@ -526,13 +514,12 @@
         const MEASURES_PER_SYSTEM = 4;
         let actualMaxMeasures = 0;
 
-        // BUG FIX: não mutamos os objetos originais — guardamos _originalIndex num mapa separado
         let staffData = staffs.map(s => {
             let measures = [];
             let currentMeasure = [];
             let acc = 0;
             for (let i = 0; i < s.composition.length; i++) {
-                let item = { ...s.composition[i], _originalIndex: i }; // cópia rasa, sem mutar o original
+                let item = { ...s.composition[i], _originalIndex: i };
                 currentMeasure.push(item);
                 acc += item.ticks;
                 if (acc === ticksPerMeasure) {
@@ -570,7 +557,6 @@
                         let accTicks = 0;
                         let measureAccidentals = {};
 
-                        // BUG FIX: cálculo correto do intervalo de seleção (garante min ≤ max)
                         const selIdx = data.staff.selectedIndex;
                         const ancIdx = data.staff.selectionAnchor !== -1 ? data.staff.selectionAnchor : selIdx;
                         const minSel = Math.min(selIdx, ancIdx);
@@ -624,19 +610,13 @@
         });
 
         highlightSelection();
-        // Marca o áudio como desatualizado mas NÃO reconstrói automaticamente.
-        // O áudio só é (re)construído quando o utilizador clica em Play.
         audioReady = false;
         audioBuilding = false;
-        if (synthControl) synthControl.disable(true); // desativa botões até novo Play
+        if (synthControl) synthControl.disable(true);
         setAudioStatus('▶ Pronto para tocar');
     }
 
     // ─── SISTEMA DE ÁUDIO ────────────────────────────────────────────────────────
-    // Separado completamente da edição para não interromper builds em curso.
-    // O SynthController é criado uma vez e vive para sempre.
-    // O CreateSynth é recriado cada vez que o utilizador clica Play (após edições).
-
     let audioReady = false;
     let audioBuilding = false;
 
@@ -658,8 +638,6 @@
         });
     }
 
-    // Chamada quando o utilizador quer tocar — constrói o buffer se necessário,
-    // depois dispara play(). Segue o padrão exato da documentação oficial.
     function playAudio() {
         if (!ABCJS.synth.supportsAudio()) {
             showToast("Áudio não suportado neste browser.");
@@ -673,7 +651,6 @@
         ensureController();
 
         if (audioReady) {
-            // Buffer já construído — play/pause direto via API programática
             synthControl.play();
             return;
         }
@@ -688,12 +665,12 @@
 
         const midiBuffer = new ABCJS.synth.CreateSynth();
         midiBuffer.init({ visualObj: lastVisualObj[0] })
-            .then(() => synthControl.setTune(lastVisualObj[0], true)) // true = userAction, buffer criado imediatamente
+            .then(() => synthControl.setTune(lastVisualObj[0], true))
             .then(() => {
                 audioReady = true;
                 audioBuilding = false;
                 setAudioStatus('');
-                synthControl.disable(false); // reabilita os botões do player
+                synthControl.disable(false);
                 synthControl.play();
             })
             .catch(err => {
@@ -726,7 +703,6 @@
         const staff = getActiveStaff();
         if (staff.composition.length === 0) return;
 
-        // BUG FIX: inicializa selectedIndex se ainda for -1
         if (staff.selectedIndex === -1) {
             staff.selectedIndex = delta > 0 ? 0 : staff.composition.length - 1;
             staff.selectionAnchor = staff.selectedIndex;
@@ -762,7 +738,6 @@
             let accOffset = accOffsets[item.accidentalIndex] || 0;
             let absolutePitch = baseVal + (item.octave * 12) + accOffset + delta;
 
-            // BUG FIX: clamp antes do módulo para evitar resultados negativos incorretos
             let newOctave = Math.floor(absolutePitch / 12);
             newOctave = Math.max(-2, Math.min(3, newOctave));
 
@@ -823,18 +798,14 @@
         if (btn) btn.classList.add('selected');
     }
 
-    // BUG FIX: changeOctave dividida em duas responsabilidades:
-    //   1. Muda a oitava de entrada (currentOctave do staff)
-    //   2. Se há seleção ativa, transpõe as notas selecionadas pela oitava
     function changeOctave(delta) {
-        if (delta === 0) return; // BUG FIX: delta=0 não faz nada
+        if (delta === 0) return;
 
         const staff = getActiveStaff();
         staff.currentOctave = Math.max(-2, Math.min(3, staff.currentOctave + delta));
         updateOctaveDisplay();
         simulateBtnPress(delta > 0 ? '#btn-oct-up' : '#btn-oct-down');
 
-        // Transpõe as notas selecionadas, se existirem
         if (staff.selectedIndex >= 0 && staff.selectedIndex < staff.composition.length) {
             const ancIdx = staff.selectionAnchor !== -1 ? staff.selectionAnchor : staff.selectedIndex;
             const minSel = Math.min(staff.selectedIndex, ancIdx);
@@ -850,7 +821,6 @@
         }
     }
 
-    // BUG FIX: resetOctave separado para uso no clearAll/newScore/updateStaffUI
     function resetOctave() {
         const staff = getActiveStaff();
         if (!staff) return;
@@ -869,13 +839,11 @@
         const allPauses = staff.composition.slice(minSel, maxSel + 1).every(n => n.note === "0");
 
         if (!allPauses) {
-            // Primeiro passo: transforma em pausas
             for (let i = minSel; i <= maxSel; i++) {
                 staff.composition[i].note = "0";
                 staff.composition[i].accidentalIndex = 3;
             }
         } else {
-            // Segundo passo: remove definitivamente
             staff.composition.splice(minSel, maxSel - minSel + 1);
             staff.selectedIndex = staff.composition.length > 0 ? Math.max(0, minSel - 1) : -1;
             staff.selectionAnchor = staff.selectedIndex;
@@ -954,28 +922,74 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>${safeTitle} - Partitura Interativa</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🎼</text></svg>">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/abcjs/6.2.2/abcjs-basic-min.js"><\/script>
     <link rel="stylesheet" type="text/css" href="https://cdnjs.cloudflare.com/ajax/libs/abcjs/6.2.2/abcjs-audio.min.css">
     <style>
-        body { font-family: 'Segoe UI', sans-serif; background:#f0f2f5; margin:0; padding:20px; display:flex; flex-direction:column; align-items:center; }
-        .container { background:white; padding:30px; border-radius:8px; box-shadow:0 4px 15px rgba(0,0,0,.1); width:100%; max-width:21cm; }
-        .audio-container { margin-bottom:30px; display:flex; justify-content:center; background:#f8fafc; padding:15px; border-radius:8px; border:1px solid #e2e8f0; }
-        @media print { body{background:white;padding:0} .container{box-shadow:none;max-width:none;width:100%;padding:0} .audio-container{display:none} }
+        body { 
+            font-family: 'Segoe UI', sans-serif; 
+            background: #f0f2f5; 
+            margin: 0; 
+            padding: 20px; 
+            display: flex; 
+            flex-direction: column; 
+            align-items: center; 
+            user-select: none; 
+            cursor: pointer; 
+            min-height: 100vh;
+        }
+        .container { 
+            background: white; 
+            padding: 30px; 
+            border-radius: 8px; 
+            box-shadow: 0 4px 15px rgba(0,0,0,.1); 
+            width: 100%; 
+            max-width: 21cm; 
+            pointer-events: none; /* Deixa o clique passar para o body */
+        }
+        #audio-controls { display: none !important; }
+        @media print { 
+            body { background: white; padding: 0; } 
+            .container { box-shadow: none; max-width: none; width: 100%; padding: 0; } 
+        }
     </style>
 </head>
 <body>
     <div class="container">
-        <div class="audio-container" id="audio-controls"></div>
+        <div id="audio-controls"></div>
         <div id="score-paper"></div>
     </div>
     <script>
         const abcString = \`${abcString.replace(/`/g, '\\`')}\`;
         const visualObj = ABCJS.renderAbc("score-paper", abcString, { responsive:"resize", add_classes:true, paddingtop:15, paddingbottom:15 });
+        
+        window.sc = null;
         if (ABCJS.synth.supportsAudio()) {
-            const sc = new ABCJS.synth.SynthController();
-            sc.load("#audio-controls", null, { displayLoop:true, displayRestart:true, displayPlay:true, displayProgress:true });
-            new ABCJS.synth.CreateSynth().init({ visualObj: visualObj[0] }).then(() => sc.setTune(visualObj[0], false));
+            window.sc = new ABCJS.synth.SynthController();
+            window.sc.load("#audio-controls", null, { displayLoop:false, displayRestart:false, displayPlay:false, displayProgress:false });
+            new ABCJS.synth.CreateSynth().init({ visualObj: visualObj[0] }).then(() => window.sc.setTune(visualObj[0], false));
         }
+
+        let clickCount = 0;
+        let clickTimer = null;
+        
+        document.body.addEventListener('click', function(e) {
+            if (!window.sc) return;
+            clickCount++;
+            
+            if (clickCount === 1) {
+                clickTimer = setTimeout(function() {
+                    if (clickCount === 1) {
+                        window.sc.play(); // Clique simples = Tocar
+                    } else if (clickCount === 2) {
+                        window.sc.pause(); // Clique duplo = Pausar
+                    } else if (clickCount >= 3) {
+                        window.sc.setTune(visualObj[0], true); // Clique triplo = Tocar do Início
+                    }
+                    clickCount = 0;
+                }, 350); // 350ms para aguardar a sequência de cliques
+            }
+        });
     <\/script>
 </body>
 </html>`;
@@ -989,7 +1003,7 @@
         a.click();
         document.body.removeChild(a);
         URL.revokeObjectURL(url);
-        showToast("Partitura exportada como HTML executável!");
+        showToast("Partitura exportada como HTML executável (Modo Limpo)!");
     }
 
     function simulateBtnPress(selector, isError = false) {
@@ -1055,12 +1069,10 @@
                 currentBPM = data.bpm || 100;
                 totalSystemMeasures = data.totalSystemMeasures || 8;
 
-                // BUG FIX CRÍTICO: rehidrata os objetos Staff para restaurar propriedades da classe
                 staffs = (data.staffs || [new Staff(1, 'standard')]).map(plain => Staff.hydrate(plain));
                 activeStaffId = data.activeStaffId || staffs[0].id;
                 nextStaffId = data.nextStaffId || 2;
 
-                // Reseta o player
                 resetAudioState();
 
                 document.getElementById('song-title').value = currentTitle;
