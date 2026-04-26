@@ -136,6 +136,9 @@
             padding: 0 4px;
             white-space: nowrap;
         }
+        
+        /* Ajuste para o submenu não sumir ao mover o rato */
+        .dropdown-menu { padding-top: 0.5rem; }
     </style>
 </head>
 <body class="h-screen flex flex-col overflow-hidden text-sm">
@@ -144,33 +147,69 @@
         <span>⚠️</span> <span id="toast-msg">Mensagem</span>
     </div>
 
-    <header class="bg-gray-800 text-gray-300 px-4 py-1.5 flex justify-between items-center select-none text-xs">
-        <div class="flex gap-4">
-            <span class="font-bold text-white flex items-center gap-2">🎼 Compositor Pro</span>
-            <span class="hover:text-white cursor-pointer">Ficheiro</span>
-            <span class="hover:text-white cursor-pointer">Editar</span>
-            <span class="hover:text-white cursor-pointer">Visualizar</span>
-            <span class="hover:text-white cursor-pointer">Adicionar</span>
+    <header class="bg-gray-800 text-gray-300 px-4 flex justify-between items-center select-none text-xs z-50 relative">
+        <div class="flex items-center gap-6">
+            <span class="font-bold text-white flex items-center gap-2 py-2">🎼 Compositor Pro</span>
+            
+            <div class="relative group">
+                <div class="hover:text-white cursor-pointer py-2 px-1">Ficheiro</div>
+                <div class="absolute left-0 top-full hidden group-hover:block dropdown-menu z-50">
+                    <div class="bg-gray-800 border border-gray-700 rounded shadow-xl min-w-[200px] py-1">
+                        <div class="px-4 py-1.5 hover:bg-gray-700 cursor-pointer" id="menu-new">📄 Nova Partitura</div>
+                        <div class="px-4 py-1.5 hover:bg-gray-700 cursor-pointer" id="menu-open">📂 Abrir Projeto (.json)</div>
+                        <div class="px-4 py-1.5 hover:bg-gray-700 cursor-pointer" id="menu-save">💾 Salvar Projeto (.json)</div>
+                        <div class="px-4 py-1.5 hover:bg-gray-700 cursor-pointer text-blue-400" id="menu-export">🌐 Exportar HTML Executável</div>
+                        <div class="h-px bg-gray-700 my-1"></div>
+                        <div class="px-4 py-1.5 hover:bg-gray-700 cursor-pointer font-medium" id="menu-props">⚙️ Propriedades da Partitura</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="relative group">
+                <div class="hover:text-white cursor-pointer py-2 px-1">Editar</div>
+                <div class="absolute left-0 top-full hidden group-hover:block dropdown-menu z-50">
+                    <div class="bg-gray-800 border border-gray-700 rounded shadow-xl min-w-[200px] py-1">
+                        <div class="px-4 py-1.5 hover:bg-gray-700 cursor-pointer" id="menu-undo">⌫ Apagar Nota Selecionada</div>
+                        <div class="px-4 py-1.5 hover:bg-gray-700 cursor-pointer text-red-400" id="menu-clear">🗑 Limpar Pauta Atual</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="relative group">
+                <div class="hover:text-white cursor-pointer py-2 px-1">Adicionar</div>
+                <div class="absolute left-0 top-full hidden group-hover:block dropdown-menu z-50">
+                    <div class="bg-gray-800 border border-gray-700 rounded shadow-xl min-w-[200px] py-1">
+                        <div class="px-4 py-1.5 hover:bg-gray-700 cursor-pointer" id="menu-add-m1">+ Adicionar 1 Compasso</div>
+                        <div class="px-4 py-1.5 hover:bg-gray-700 cursor-pointer" id="menu-add-m4">+ Adicionar 4 Compassos</div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="relative group">
+                <div class="hover:text-white cursor-pointer py-2 px-1">Pautas</div>
+                <div class="absolute left-0 top-full hidden group-hover:block dropdown-menu z-50">
+                    <div class="bg-gray-800 border border-gray-700 rounded shadow-xl min-w-[200px] py-1">
+                        <div class="px-4 py-1.5 hover:bg-gray-700 cursor-pointer" id="menu-add-staff">🎼 Adicionar Pauta de Melodia</div>
+                        <div class="px-4 py-1.5 hover:bg-gray-700 cursor-pointer" id="menu-add-perc">🥁 Adicionar Pauta de Percussão</div>
+                        <div class="h-px bg-gray-700 my-1"></div>
+                        <div class="px-4 py-1.5 hover:bg-gray-700 cursor-pointer text-red-400" id="menu-remove-staff">❌ Remover Pauta Selecionada</div>
+                    </div>
+                </div>
+            </div>
         </div>
-        <div id="header-time-sig" class="font-mono text-[10px] bg-gray-700 px-2 rounded text-gray-400">4/4</div>
+
+        <div class="flex items-center gap-4">
+            <span id="header-bpm-display" class="text-[10px] text-gray-400">BPM: 100</span>
+            <span id="header-key-display" class="text-[10px] text-gray-400">Tom: C</span>
+            <div id="header-time-sig" class="font-mono text-[10px] bg-gray-700 px-2 rounded text-gray-400">4/4</div>
+        </div>
     </header>
 
     <div class="bg-gray-50 border-b border-gray-300 flex flex-wrap items-center p-1 select-none shadow-sm z-20">
-        
         <div class="toolbar-group items-center gap-2">
             <button id="btn-play" class="tool-btn text-green-700 font-bold px-3" title="Tocar (Barra de Espaço)">▶ Play</button>
             <div id="audio-controls"></div>
-            <span id="audio-status" class="text-gray-400 text-[10px]">▶ Pronto para tocar</span>
-        </div>
-
-        <div class="toolbar-group">
-            <button id="btn-new" class="tool-btn" title="Nova Partitura">📄</button>
-            <button id="btn-open" class="tool-btn" title="Abrir Projeto (JSON)">📂</button>
-            <button id="btn-save" class="tool-btn" title="Salvar Projeto (JSON)">💾</button>
-            <button id="btn-export-html" class="tool-btn text-blue-600" title="Exportar Partitura Executável (HTML)">🌐</button>
-            <div class="w-px h-4 bg-gray-300 mx-1"></div>
-            <button id="btn-undo" class="tool-btn" data-shortcut="Backspace/Del" title="Apagar Nota Selecionada">⌫</button>
-            <button id="btn-clear" class="tool-btn text-red-600" title="Limpar Pauta Atual">🗑</button>
+            <span id="audio-status" class="text-gray-400 text-[10px] w-24">▶ Pronto</span>
         </div>
 
         <div class="toolbar-group" id="duration-controls">
@@ -197,7 +236,7 @@
             <button id="btn-sel-next" class="tool-btn" data-shortcut="→" title="Próxima Nota">▶</button>
         </div>
 
-        <div class="toolbar-group bg-blue-50/50">
+        <div class="toolbar-group bg-blue-50/50 flex-1 justify-center">
             <button class="tool-btn font-bold note-btn" data-note="c" data-shortcut="C">C</button>
             <button class="tool-btn font-bold note-btn" data-note="d" data-shortcut="D">D</button>
             <button class="tool-btn font-bold note-btn" data-note="e" data-shortcut="E">E</button>
@@ -212,69 +251,21 @@
 
     <div class="flex-1 flex overflow-hidden">
         
-        <aside class="w-64 bg-gray-50 border-r border-gray-300 flex flex-col overflow-y-auto z-10 shadow-[2px_0_5px_rgba(0,0,0,0.05)]">
-            
-            <div class="palette-header">🎼 Instrumentos / Pautas</div>
+        <aside class="w-56 bg-gray-50 border-r border-gray-300 flex flex-col overflow-y-auto z-10 shadow-[2px_0_5px_rgba(0,0,0,0.05)]">
+            <div class="palette-header">🎼 Pauta Atual</div>
             <div class="palette-content">
-                <select id="staff-selector" class="w-full p-1.5 border border-gray-300 rounded text-xs bg-white focus:outline-none focus:border-blue-500 font-semibold"></select>
-                
                 <div>
-                    <label class="block text-[10px] text-gray-500 uppercase mb-1">Nome da Pauta</label>
+                    <label class="block text-[10px] text-gray-500 uppercase mb-1">Selecionar Pauta</label>
+                    <select id="staff-selector" class="w-full p-1.5 border border-gray-300 rounded text-xs bg-white focus:outline-none focus:border-blue-500 font-semibold"></select>
+                </div>
+                
+                <div class="mt-2">
+                    <label class="block text-[10px] text-gray-500 uppercase mb-1">Nome de Exibição</label>
                     <input type="text" id="staff-name-input" class="w-full p-1.5 border border-gray-300 rounded text-xs bg-white" placeholder="Ex: Piano (Mão Direita)">
                 </div>
 
-                <div class="flex gap-1">
-                    <button id="btn-add-staff" class="flex-1 border border-gray-300 bg-white hover:bg-gray-100 py-1 rounded text-xs transition">+ Melodia</button>
-                    <button id="btn-add-perc" class="flex-1 border border-gray-300 bg-white hover:bg-gray-100 py-1 rounded text-xs transition">+ Percussão</button>
-                </div>
-                <button id="btn-remove-staff" class="w-full border border-red-200 text-red-600 bg-red-50 hover:bg-red-100 py-1 rounded text-xs transition hidden">Remover Atual</button>
-            </div>
-
-            <div class="palette-header">📏 Extensão</div>
-            <div class="palette-content">
-                <div class="flex gap-1">
-                    <button id="btn-add-measure" class="flex-1 border border-gray-300 bg-white hover:bg-gray-100 py-1 rounded text-xs transition font-semibold text-blue-700">+ 1 Compasso</button>
-                    <button id="btn-add-4-measures" class="flex-1 border border-gray-300 bg-white hover:bg-gray-100 py-1 rounded text-xs transition font-semibold text-blue-700">+ 4 Compassos</button>
-                </div>
-            </div>
-
-            <div class="palette-header">📝 Propriedades</div>
-            <div class="palette-content">
-                <div>
-                    <label class="block text-[10px] text-gray-500 uppercase mb-1">Título</label>
-                    <input type="text" id="song-title" value="Nova Partitura" class="w-full p-1.5 border border-gray-300 rounded text-xs bg-white">
-                </div>
-                <div>
-                    <label class="block text-[10px] text-gray-500 uppercase mb-1">Compositor</label>
-                    <input type="text" id="song-composer" value="Músico" class="w-full p-1.5 border border-gray-300 rounded text-xs bg-white">
-                </div>
-                <div class="pt-2">
-                    <label class="flex justify-between text-[10px] text-gray-500 uppercase mb-1">
-                        <span>Andamento (BPM)</span>
-                        <span id="bpm-val" class="font-bold text-gray-700">100</span>
-                    </label>
-                    <input type="range" id="bpm-slider" min="40" max="240" value="100" class="w-full">
-                </div>
-            </div>
-
-            <div class="palette-header">🎵 Armadura e Clave</div>
-            <div class="palette-content">
-                <div>
-                    <label class="block text-[10px] text-gray-500 uppercase mb-1">Tonalidade Global</label>
-                    <select id="key-signature" class="w-full p-1.5 border border-gray-300 rounded text-xs bg-white">
-                        <option value="C">Dó Maior / Lá menor</option>
-                        <option value="G">Sol Maior (1♯)</option>
-                        <option value="D">Ré Maior (2♯)</option>
-                        <option value="A">Lá Maior (3♯)</option>
-                        <option value="E">Mi Maior (4♯)</option>
-                        <option value="F">Fá Maior (1♭)</option>
-                        <option value="Bb">Si♭ Maior (2♭)</option>
-                        <option value="Eb">Mi♭ Maior (3♭)</option>
-                        <option value="Ab">Lá♭ Maior (4♭)</option>
-                    </select>
-                </div>
-                <div>
-                    <label class="block text-[10px] text-gray-500 uppercase mb-1">Clave da Pauta Atual</label>
+                <div class="mt-2">
+                    <label class="block text-[10px] text-gray-500 uppercase mb-1">Clave de Leitura</label>
                     <select id="clef-type" class="w-full p-1.5 border border-gray-300 rounded text-xs bg-white">
                         <option value="treble">Sol (Agudos)</option>
                         <option value="bass">Fá (Graves)</option>
@@ -283,17 +274,6 @@
                         <option value="perc">Percussão</option>
                     </select>
                 </div>
-            </div>
-
-            <div class="palette-header">⏱ Fórmulas de Compasso</div>
-            <div class="palette-content">
-                <select id="time-signature" class="w-full p-1.5 border border-gray-300 rounded text-xs bg-white">
-                    <option value="4/4">4/4 (Quaternário)</option>
-                    <option value="3/4">3/4 (Ternário)</option>
-                    <option value="2/4">2/4 (Binário)</option>
-                    <option value="6/8">6/8 (Composto)</option>
-                </select>
-                <p class="text-[10px] text-gray-400 mt-1 leading-tight">Nota: Alterar o compasso limpará a partitura atual para manter a consistência matemática.</p>
             </div>
         </aside>
 
@@ -316,6 +296,60 @@
         </div>
     </footer>
 
+    <div id="props-modal" class="fixed inset-0 bg-black/60 hidden flex items-center justify-center z-[100]">
+        <div class="bg-white rounded shadow-2xl w-96 overflow-hidden">
+            <div class="bg-gray-800 text-white px-4 py-2 font-bold flex justify-between items-center">
+                <span>⚙️ Propriedades da Partitura</span>
+                <button id="btn-close-props" class="hover:text-red-400 font-bold text-lg leading-none">✕</button>
+            </div>
+            <div class="p-5 flex flex-col gap-4 text-sm bg-gray-50">
+                <div>
+                    <label class="block text-xs font-semibold text-gray-600 uppercase mb-1">Título</label>
+                    <input type="text" id="song-title" value="Nova Partitura" class="w-full p-2 border border-gray-300 rounded text-sm bg-white">
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-gray-600 uppercase mb-1">Compositor</label>
+                    <input type="text" id="song-composer" value="Músico" class="w-full p-2 border border-gray-300 rounded text-sm bg-white">
+                </div>
+                <div class="grid grid-cols-2 gap-4 border-t border-gray-200 pt-4">
+                    <div>
+                        <label class="block text-xs font-semibold text-gray-600 uppercase mb-1">Tonalidade</label>
+                        <select id="key-signature" class="w-full p-2 border border-gray-300 rounded text-sm bg-white">
+                            <option value="C">Dó Maior / Lá menor</option>
+                            <option value="G">Sol Maior (1♯)</option>
+                            <option value="D">Ré Maior (2♯)</option>
+                            <option value="A">Lá Maior (3♯)</option>
+                            <option value="E">Mi Maior (4♯)</option>
+                            <option value="F">Fá Maior (1♭)</option>
+                            <option value="Bb">Si♭ Maior (2♭)</option>
+                            <option value="Eb">Mi♭ Maior (3♭)</option>
+                            <option value="Ab">Lá♭ Maior (4♭)</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-gray-600 uppercase mb-1">Compasso</label>
+                        <select id="time-signature" class="w-full p-2 border border-gray-300 rounded text-sm bg-white">
+                            <option value="4/4">4/4 (Quaternário)</option>
+                            <option value="3/4">3/4 (Ternário)</option>
+                            <option value="2/4">2/4 (Binário)</option>
+                            <option value="6/8">6/8 (Composto)</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="border-t border-gray-200 pt-4">
+                    <label class="flex justify-between text-xs font-semibold text-gray-600 uppercase mb-2">
+                        <span>Andamento (BPM)</span>
+                        <span id="bpm-val" class="text-blue-600 font-bold bg-blue-100 px-2 rounded">100</span>
+                    </label>
+                    <input type="range" id="bpm-slider" min="40" max="240" value="100" class="w-full">
+                </div>
+            </div>
+            <div class="bg-gray-200 px-5 py-3 flex justify-end">
+                <button id="btn-apply-props" class="bg-blue-600 hover:bg-blue-700 text-white px-5 py-1.5 rounded font-medium shadow transition">Concluir</button>
+            </div>
+        </div>
+    </div>
+
     <textarea id="hidden-abc" class="hidden"></textarea>
     <input type="file" id="file-upload" accept=".json" class="hidden">
 
@@ -327,7 +361,6 @@
             this.type = type;
             this.name = type === 'percussion' ? `Percussão ${id}` : `Melodia ${id}`;
             this.composition = [];
-            // FIX: Pautas de percussão nascem como Clave de Fá por padrão
             this.clef = type === 'percussion' ? 'bass' : 'treble';
             this.selectedIndex = -1;
             this.selectionAnchor = -1;
@@ -338,7 +371,6 @@
             const s = new Staff(plain.id, plain.type);
             s.name = plain.name;
             s.composition = plain.composition || [];
-            // Migração: se um arquivo antigo tinha clef='perc', passa para 'bass' automaticamente
             s.clef = (plain.type === 'percussion' && plain.clef === 'perc') ? 'bass' : plain.clef;
             s.selectedIndex = plain.selectedIndex !== undefined ? plain.selectedIndex : -1;
             s.selectionAnchor = plain.selectionAnchor !== undefined ? plain.selectionAnchor : -1;
@@ -370,7 +402,6 @@
     let ticksForBeaming = 16;
     let ticksPerVisualBeat = 16;
 
-    // Sintetizador auxiliar apenas para tocar a nota isolada ao clicar
     let feedbackSynth = null; 
 
     // ─── DICIONÁRIOS ─────────────────────────────────────────────────────────────
@@ -483,13 +514,18 @@
 
         const clefSelect = document.getElementById('clef-type');
         clefSelect.value = active.clef;
-        // FIX: Não desabilitar o select para percussão (permite trocar se quiser)
         clefSelect.disabled = false; 
 
-        document.getElementById('btn-remove-staff').classList.toggle('hidden', staffs.length <= 1);
+        document.getElementById('menu-remove-staff').style.display = staffs.length <= 1 ? 'none' : 'block';
 
         updateOctaveDisplay();
         updateMeasureUI();
+    }
+
+    function updateHeaderInfo() {
+        document.getElementById('header-bpm-display').innerText = `BPM: ${currentBPM}`;
+        document.getElementById('header-key-display').innerText = `Tom: ${currentKey}`;
+        document.getElementById('header-time-sig').innerText = currentTimeSignature;
     }
 
     // ─── GERAÇÃO DO STRING ABC ────────────────────────────────────────────────────
@@ -618,7 +654,8 @@
         audioReady = false;
         audioBuilding = false;
         if (synthControl) synthControl.disable(true);
-        setAudioStatus('▶ Pronto para tocar');
+        setAudioStatus('▶ Pronto');
+        updateHeaderInfo();
     }
 
     // ─── SISTEMA DE ÁUDIO ────────────────────────────────────────────────────────
@@ -687,19 +724,17 @@
             });
     }
 
-    // FIX: Tocar a nota imediatamente após inserir (Feedback)
     function playSingleNoteFeedback(item, isPerc, clef) {
         if (!ABCJS.synth.supportsAudio() || audioBuilding) return;
         
         if (feedbackSynth) {
-            feedbackSynth.stop(); // Interrompe a anterior se for inserida rápida demais
+            feedbackSynth.stop();
         }
         
         let pitchStr = getAbcPitch(item, {});
-        // Constrói um ABC apenas para essa nota
         let abc = `X:1\nL:1/4\nK:${currentKey}\n${isPerc ? '%%MIDI channel 10\n' : ''}V:1 clef=${clef}\n${pitchStr}\n`;
         
-        let visualObj = ABCJS.renderAbc("*", abc)[0]; // "*" previne que desenhe na tela
+        let visualObj = ABCJS.renderAbc("*", abc)[0];
         feedbackSynth = new ABCJS.synth.CreateSynth();
         
         feedbackSynth.init({ visualObj: visualObj }).then(() => {
@@ -714,7 +749,7 @@
         audioBuilding = false;
         synthControl = null;
         document.getElementById('audio-controls').innerHTML = '';
-        setAudioStatus('▶ Pronto para tocar');
+        setAudioStatus('▶ Pronto');
     }
 
     function highlightSelection() {
@@ -810,14 +845,12 @@
         };
 
         staff.composition.push(newItem);
-
         staff.selectedIndex = staff.composition.length - 1;
         staff.selectionAnchor = staff.selectedIndex;
 
         updateScore();
         updateMeasureUI();
         
-        // FIX: Tocar a nota
         if (noteLetter !== "0") {
             playSingleNoteFeedback(newItem, staff.type === 'percussion', staff.clef);
         }
@@ -854,13 +887,6 @@
             }
             updateScore();
         }
-    }
-
-    function resetOctave() {
-        const staff = getActiveStaff();
-        if (!staff) return;
-        staff.currentOctave = 0;
-        updateOctaveDisplay();
     }
 
     function deleteNote() {
@@ -921,7 +947,6 @@
         document.getElementById('time-signature').value = currentTimeSignature;
         document.getElementById('bpm-slider').value = currentBPM;
         document.getElementById('bpm-val').innerText = currentBPM;
-        document.getElementById('header-time-sig').innerText = currentTimeSignature;
 
         updateTimeSignatureMath();
         updateStaffUI();
@@ -961,32 +986,10 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/abcjs/6.2.2/abcjs-basic-min.js"><\/script>
     <link rel="stylesheet" type="text/css" href="https://cdnjs.cloudflare.com/ajax/libs/abcjs/6.2.2/abcjs-audio.min.css">
     <style>
-        body { 
-            font-family: 'Segoe UI', sans-serif; 
-            background: #f0f2f5; 
-            margin: 0; 
-            padding: 20px; 
-            display: flex; 
-            flex-direction: column; 
-            align-items: center; 
-            user-select: none; 
-            cursor: pointer; 
-            min-height: 100vh;
-        }
-        .container { 
-            background: white; 
-            padding: 30px; 
-            border-radius: 8px; 
-            box-shadow: 0 4px 15px rgba(0,0,0,.1); 
-            width: 100%; 
-            max-width: 21cm; 
-            pointer-events: none; /* Deixa o clique passar para o body */
-        }
+        body { font-family: 'Segoe UI', sans-serif; background: #f0f2f5; margin: 0; padding: 20px; display: flex; flex-direction: column; align-items: center; user-select: none; cursor: pointer; min-height: 100vh; }
+        .container { background: white; padding: 30px; border-radius: 8px; box-shadow: 0 4px 15px rgba(0,0,0,.1); width: 100%; max-width: 21cm; pointer-events: none; }
         #audio-controls { display: none !important; }
-        @media print { 
-            body { background: white; padding: 0; } 
-            .container { box-shadow: none; max-width: none; width: 100%; padding: 0; } 
-        }
+        @media print { body { background: white; padding: 0; } .container { box-shadow: none; max-width: none; width: 100%; padding: 0; } }
     </style>
 </head>
 <body>
@@ -1014,13 +1017,9 @@
             
             if (clickCount === 1) {
                 clickTimer = setTimeout(function() {
-                    if (clickCount === 1) {
-                        window.sc.play(); // Clique simples = Tocar
-                    } else if (clickCount === 2) {
-                        window.sc.pause(); // Clique duplo = Pausar
-                    } else if (clickCount >= 3) {
-                        window.sc.setTune(visualObj[0], true); // Clique triplo = Tocar do Início
-                    }
+                    if (clickCount === 1) window.sc.play();
+                    else if (clickCount === 2) window.sc.pause();
+                    else if (clickCount >= 3) window.sc.setTune(visualObj[0], true);
                     clickCount = 0;
                 }, 350);
             }
@@ -1038,7 +1037,7 @@
         a.click();
         document.body.removeChild(a);
         URL.revokeObjectURL(url);
-        showToast("Partitura exportada como HTML executável (Modo Limpo)!");
+        showToast("Partitura exportada como HTML executável!");
     }
 
     function simulateBtnPress(selector, isError = false) {
@@ -1053,15 +1052,94 @@
         }
     }
 
-    // ─── LISTENERS ───────────────────────────────────────────────────────────────
+    // ─── LISTENERS DO MENU SUPERIOR ──────────────────────────────────────────────
+    document.getElementById('menu-new').addEventListener('click', newScore);
+    document.getElementById('menu-open').addEventListener('click', () => document.getElementById('file-upload').click());
+    document.getElementById('menu-save').addEventListener('click', saveScore);
+    document.getElementById('menu-export').addEventListener('click', exportHtml);
+    
+    document.getElementById('menu-undo').addEventListener('click', deleteNote);
+    document.getElementById('menu-clear').addEventListener('click', clearAll);
+
+    document.getElementById('menu-add-m1').addEventListener('click', () => { totalSystemMeasures++; updateScore(); });
+    document.getElementById('menu-add-m4').addEventListener('click', () => { totalSystemMeasures+=4; updateScore(); });
+
+    document.getElementById('menu-add-staff').addEventListener('click', () => {
+        const s = new Staff(nextStaffId++, 'standard');
+        staffs.push(s);
+        activeStaffId = s.id;
+        updateStaffUI();
+        updateScore();
+    });
+
+    document.getElementById('menu-add-perc').addEventListener('click', () => {
+        const s = new Staff(nextStaffId++, 'percussion');
+        staffs.push(s);
+        activeStaffId = s.id;
+        updateStaffUI();
+        updateScore();
+    });
+
+    document.getElementById('menu-remove-staff').addEventListener('click', () => {
+        if (staffs.length > 1) {
+            staffs = staffs.filter(s => s.id !== activeStaffId);
+            activeStaffId = staffs[0].id;
+            updateStaffUI();
+            updateScore();
+        }
+    });
+
+    // ─── LÓGICA DO MODAL DE PROPRIEDADES ─────────────────────────────────────────
+    const propsModal = document.getElementById('props-modal');
+    document.getElementById('menu-props').addEventListener('click', () => propsModal.classList.remove('hidden'));
+    document.getElementById('btn-close-props').addEventListener('click', () => propsModal.classList.add('hidden'));
+    document.getElementById('btn-apply-props').addEventListener('click', () => {
+        propsModal.classList.add('hidden');
+        updateScore();
+    });
+
+    document.getElementById('song-title').addEventListener('input', e => currentTitle = e.target.value);
+    document.getElementById('song-composer').addEventListener('input', e => currentComposer = e.target.value);
+    document.getElementById('key-signature').addEventListener('change', e => { currentKey = e.target.value; });
+    document.getElementById('time-signature').addEventListener('change', e => {
+        if (staffs.some(s => s.composition.length > 0)) {
+            staffs.forEach(s => s.composition = []);
+            showToast("Pautas limpas devido à alteração de compasso.");
+        }
+        currentTimeSignature = e.target.value;
+        updateTimeSignatureMath();
+        updateMeasureUI();
+    });
+    document.getElementById('bpm-slider').addEventListener('input', e => {
+        currentBPM = e.target.value;
+        document.getElementById('bpm-val').innerText = currentBPM;
+    });
+
+    // ─── LÓGICA DA PALETA E TECLADO ──────────────────────────────────────────────
+    document.getElementById('staff-selector').addEventListener('change', e => {
+        activeStaffId = parseInt(e.target.value);
+        updateStaffUI();
+        updateScore();
+    });
+    document.getElementById('staff-name-input').addEventListener('input', (e) => {
+        const staff = getActiveStaff();
+        if (!staff) return;
+        staff.name = e.target.value;
+        const opt = document.querySelector(`#staff-selector option[value="${staff.id}"]`);
+        if (opt) opt.innerText = staff.name;
+        document.getElementById('status-staff-name').innerText = `Pauta: ${staff.name}`;
+    });
+    document.getElementById('staff-name-input').addEventListener('change', () => updateScore());
+    document.getElementById('clef-type').addEventListener('change', e => { 
+        getActiveStaff().clef = e.target.value; 
+        updateScore(); 
+    });
+
     window.addEventListener('keydown', (e) => {
         if (['INPUT', 'TEXTAREA', 'SELECT'].includes(e.target.tagName)) return;
         const key = e.key.toLowerCase();
 
-        if (key === ' ') {
-            e.preventDefault();
-            playAudio();
-        }
+        if (key === ' ') { e.preventDefault(); playAudio(); }
         else if (key >= '1' && key <= '7') setDuration(parseInt(key));
         else if (['a','b','c','d','e','f','g','0'].includes(key)) addNote(key);
         else if (e.key === 'ArrowUp')    { e.preventDefault(); (e.ctrlKey||e.metaKey) ? changeOctave(1)  : transposeSelectedNote(1); }
@@ -1080,15 +1158,8 @@
     document.getElementById('btn-acc-up').addEventListener('click', () => transposeSelectedNote(1));
     document.getElementById('btn-oct-up').addEventListener('click', () => changeOctave(1));
     document.getElementById('btn-oct-down').addEventListener('click', () => changeOctave(-1));
-    document.getElementById('btn-undo').addEventListener('click', deleteNote);
-    document.getElementById('btn-clear').addEventListener('click', clearAll);
-    document.getElementById('btn-new').addEventListener('click', newScore);
-    document.getElementById('btn-save').addEventListener('click', saveScore);
-    document.getElementById('btn-export-html').addEventListener('click', exportHtml);
 
     document.getElementById('btn-play').addEventListener('click', playAudio);
-
-    document.getElementById('btn-open').addEventListener('click', () => document.getElementById('file-upload').click());
 
     document.getElementById('file-upload').addEventListener('change', (event) => {
         const file = event.target.files[0];
@@ -1116,7 +1187,6 @@
                 document.getElementById('time-signature').value = currentTimeSignature;
                 document.getElementById('bpm-slider').value = currentBPM;
                 document.getElementById('bpm-val').innerText = currentBPM;
-                document.getElementById('header-time-sig').innerText = currentTimeSignature;
 
                 updateTimeSignatureMath();
                 updateStaffUI();
@@ -1130,77 +1200,6 @@
         reader.readAsText(file);
         event.target.value = '';
     });
-
-    document.getElementById('staff-selector').addEventListener('change', e => {
-        activeStaffId = parseInt(e.target.value);
-        updateStaffUI();
-        updateScore();
-    });
-
-    document.getElementById('btn-add-staff').addEventListener('click', () => {
-        const s = new Staff(nextStaffId++, 'standard');
-        staffs.push(s);
-        activeStaffId = s.id;
-        updateStaffUI();
-        updateScore();
-    });
-
-    document.getElementById('btn-add-perc').addEventListener('click', () => {
-        const s = new Staff(nextStaffId++, 'percussion');
-        staffs.push(s);
-        activeStaffId = s.id;
-        updateStaffUI();
-        updateScore();
-    });
-
-    document.getElementById('btn-remove-staff').addEventListener('click', () => {
-        if (staffs.length > 1) {
-            staffs = staffs.filter(s => s.id !== activeStaffId);
-            activeStaffId = staffs[0].id;
-            updateStaffUI();
-            updateScore();
-        }
-    });
-
-    document.getElementById('staff-name-input').addEventListener('input', (e) => {
-        const staff = getActiveStaff();
-        if (!staff) return;
-        staff.name = e.target.value;
-        const opt = document.querySelector(`#staff-selector option[value="${staff.id}"]`);
-        if (opt) opt.innerText = staff.name;
-        document.getElementById('status-staff-name').innerText = `Pauta: ${staff.name}`;
-    });
-
-    document.getElementById('staff-name-input').addEventListener('change', () => updateScore());
-
-    document.getElementById('btn-add-measure').addEventListener('click', () => { totalSystemMeasures++; updateScore(); });
-    document.getElementById('btn-add-4-measures').addEventListener('click', () => { totalSystemMeasures += 4; updateScore(); });
-
-    document.getElementById('song-title').addEventListener('input', e => currentTitle = e.target.value);
-    document.getElementById('song-title').addEventListener('change', () => updateScore());
-    document.getElementById('song-composer').addEventListener('input', e => currentComposer = e.target.value);
-    document.getElementById('song-composer').addEventListener('change', () => updateScore());
-
-    document.getElementById('key-signature').addEventListener('change', e => { currentKey = e.target.value; updateScore(); });
-    document.getElementById('clef-type').addEventListener('change', e => { getActiveStaff().clef = e.target.value; updateScore(); });
-
-    document.getElementById('time-signature').addEventListener('change', e => {
-        if (staffs.some(s => s.composition.length > 0)) {
-            staffs.forEach(s => s.composition = []);
-            showToast("Pautas limpas devido à alteração de compasso.");
-        }
-        currentTimeSignature = e.target.value;
-        document.getElementById('header-time-sig').innerText = currentTimeSignature;
-        updateTimeSignatureMath();
-        updateScore();
-        updateMeasureUI();
-    });
-
-    document.getElementById('bpm-slider').addEventListener('input', e => {
-        currentBPM = e.target.value;
-        document.getElementById('bpm-val').innerText = currentBPM;
-    });
-    document.getElementById('bpm-slider').addEventListener('change', () => updateScore());
 
     // ─── INIT ────────────────────────────────────────────────────────────────────
     updateTimeSignatureMath();
