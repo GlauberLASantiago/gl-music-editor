@@ -1,0 +1,1088 @@
+<!DOCTYPE html>
+<html lang="pt-PT">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Compositor Visual Pro</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🎼</text></svg>">
+    
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/abcjs/6.2.2/abcjs-basic-min.js"></script>
+    <link rel="stylesheet" type="text/css" href="https://cdnjs.cloudflare.com/ajax/libs/abcjs/6.2.2/abcjs-audio.min.css">
+
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+        body { font-family: 'Inter', sans-serif; background-color: #cbd5e1; }
+        
+        .toolbar-group {
+            display: flex;
+            align-items: center;
+            gap: 2px;
+            padding: 0 8px;
+            border-right: 1px solid #d1d5db;
+        }
+        .tool-btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            height: 32px;
+            min-width: 32px;
+            padding: 0 6px;
+            border-radius: 4px;
+            color: #374151;
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            user-select: none;
+            transition: all 0.1s;
+            border: 1px solid transparent;
+        }
+        .tool-btn:hover { background-color: #e5e7eb; }
+        .tool-btn:active, .tool-btn.active-simulated {
+            background-color: #d1d5db;
+            border-color: #9ca3af;
+        }
+        .tool-btn.selected {
+            background-color: #dbeafe;
+            color: #1d4ed8;
+            border-color: #93c5fd;
+        }
+
+        .tool-btn[data-shortcut] { position: relative; }
+        .tool-btn[data-shortcut]::after {
+            content: attr(data-shortcut);
+            position: absolute;
+            bottom: -20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: #1f2937;
+            color: white;
+            font-size: 10px;
+            padding: 2px 4px;
+            border-radius: 4px;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.2s;
+            white-space: nowrap;
+            z-index: 50;
+        }
+        .tool-btn:hover::after { opacity: 1; }
+
+        .paper {
+            background-color: white;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+            width: 100%;
+            max-width: 21cm;
+            min-height: 29.7cm;
+            margin: 2rem auto;
+            padding: 2cm 1.5cm;
+        }
+        
+        .palette-header {
+            background-color: #f3f4f6;
+            padding: 6px 12px;
+            font-size: 11px;
+            font-weight: 700;
+            text-transform: uppercase;
+            color: #4b5563;
+            border-top: 1px solid #e5e7eb;
+            border-bottom: 1px solid #e5e7eb;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .palette-content { padding: 12px; display: flex; flex-direction: column; gap: 8px; }
+
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #9ca3af; border-radius: 3px; }
+        ::-webkit-scrollbar-thumb:hover { background: #6b7280; }
+
+        .toast-enter { transform: translate(-50%, 0); opacity: 1; }
+        .toast-exit { transform: translate(-50%, -150%); opacity: 0; }
+        
+        .highlighted-note, .highlighted-note path {
+            fill: #ef4444 !important;
+            stroke: #ef4444 !important;
+        }
+
+        /* Ocultar UI do ABCJS Player */
+        .abcjs-inline-audio { display: none !important; }
+    </style>
+</head>
+<body class="h-screen flex flex-col overflow-hidden text-sm">
+
+    <div id="toast" class="fixed top-12 left-1/2 toast-exit bg-red-600 text-white px-6 py-2 rounded shadow-lg transition-all duration-300 z-50 pointer-events-none font-semibold flex items-center gap-2">
+        <span>⚠️</span> <span id="toast-msg">Mensagem</span>
+    </div>
+
+    <header class="bg-gray-800 text-gray-300 px-4 py-1.5 flex justify-between items-center select-none text-xs">
+        <div class="flex gap-4">
+            <span class="font-bold text-white flex items-center gap-2">🎼 Compositor Pro</span>
+            <span class="hover:text-white cursor-pointer">Ficheiro</span>
+            <span class="hover:text-white cursor-pointer">Editar</span>
+            <span class="hover:text-white cursor-pointer">Visualizar</span>
+            <span class="hover:text-white cursor-pointer">Adicionar</span>
+        </div>
+        <div id="header-time-sig" class="font-mono text-[10px] bg-gray-700 px-2 rounded text-gray-400">4/4</div>
+    </header>
+
+    <div class="bg-gray-50 border-b border-gray-300 flex flex-wrap items-center p-1 select-none shadow-sm z-20">
+        
+        <div class="toolbar-group">
+            <button id="btn-play" class="tool-btn text-green-600 hover:text-green-700" title="Tocar (Barra de Espaço)"><span class="text-lg">▶</span></button>
+            <div id="audio-controls"></div>
+        </div>
+
+        <div class="toolbar-group">
+            <button id="btn-new" class="tool-btn" title="Nova Partitura">📄</button>
+            <button id="btn-open" class="tool-btn" title="Abrir Projeto (JSON)">📂</button>
+            <button id="btn-save" class="tool-btn" title="Salvar Projeto (JSON)">💾</button>
+            <button id="btn-export-html" class="tool-btn text-blue-600" title="Exportar Partitura Executável (HTML)">🌐</button>
+            <div class="w-px h-4 bg-gray-300 mx-1"></div>
+            <button id="btn-undo" class="tool-btn" data-shortcut="Backspace/Del" title="Apagar Nota Selecionada">⌫</button>
+            <button id="btn-clear" class="tool-btn text-red-600" title="Limpar Pauta Atual">🗑</button>
+        </div>
+
+        <div class="toolbar-group" id="duration-controls">
+            <button class="tool-btn text-lg" data-dur="1" data-shortcut="1">𝅝</button>
+            <button class="tool-btn text-lg" data-dur="2" data-shortcut="2">𝅗𝅥</button>
+            <button class="tool-btn text-lg selected" data-dur="3" data-shortcut="3">𝅘𝅥</button>
+            <button class="tool-btn text-lg" data-dur="4" data-shortcut="4">𝅘𝅥𝅮</button>
+            <button class="tool-btn text-lg" data-dur="5" data-shortcut="5">𝅘𝅥𝅯</button>
+            <button class="tool-btn text-lg" data-dur="6" data-shortcut="6">𝅘𝅥𝅰</button>
+            <button class="tool-btn text-lg" data-dur="7" data-shortcut="7">𝅘𝅥𝅱</button>
+        </div>
+
+        <div class="toolbar-group">
+            <button id="btn-acc-down" class="tool-btn" data-shortcut="↓">♭</button>
+            <button id="btn-acc-up" class="tool-btn" data-shortcut="↑">♯</button>
+            <div class="w-px h-4 bg-gray-300 mx-1"></div>
+            <button id="btn-oct-down" class="tool-btn" data-shortcut="Ctrl+↓">Oitava -</button>
+            <span id="octave-display" class="font-mono text-xs text-gray-500 px-1 w-12 text-center">Nrml</span>
+            <button id="btn-oct-up" class="tool-btn" data-shortcut="Ctrl+↑">Oitava +</button>
+        </div>
+
+        <div class="toolbar-group">
+            <button id="btn-sel-prev" class="tool-btn" data-shortcut="←" title="Nota Anterior">◀</button>
+            <button id="btn-sel-next" class="tool-btn" data-shortcut="→" title="Próxima Nota">▶</button>
+        </div>
+
+        <div class="toolbar-group bg-blue-50/50">
+            <button class="tool-btn font-bold note-btn" data-note="c" data-shortcut="C">C</button>
+            <button class="tool-btn font-bold note-btn" data-note="d" data-shortcut="D">D</button>
+            <button class="tool-btn font-bold note-btn" data-note="e" data-shortcut="E">E</button>
+            <button class="tool-btn font-bold note-btn" data-note="f" data-shortcut="F">F</button>
+            <button class="tool-btn font-bold note-btn" data-note="g" data-shortcut="G">G</button>
+            <button class="tool-btn font-bold note-btn" data-note="a" data-shortcut="A">A</button>
+            <button class="tool-btn font-bold note-btn" data-note="b" data-shortcut="B">B</button>
+            <div class="w-px h-4 bg-gray-300 mx-1"></div>
+            <button class="tool-btn font-bold note-btn text-red-500" data-note="0" data-shortcut="0">Pausa</button>
+        </div>
+    </div>
+
+    <div class="flex-1 flex overflow-hidden">
+        
+        <aside class="w-64 bg-gray-50 border-r border-gray-300 flex flex-col overflow-y-auto z-10 shadow-[2px_0_5px_rgba(0,0,0,0.05)]">
+            
+            <div class="palette-header">🎼 Instrumentos / Pautas</div>
+            <div class="palette-content">
+                <select id="staff-selector" class="w-full p-1.5 border border-gray-300 rounded text-xs bg-white focus:outline-none focus:border-blue-500 font-semibold"></select>
+                
+                <div>
+                    <label class="block text-[10px] text-gray-500 uppercase mb-1">Nome da Pauta</label>
+                    <input type="text" id="staff-name-input" class="w-full p-1.5 border border-gray-300 rounded text-xs bg-white" placeholder="Ex: Piano (Mão Direita)">
+                </div>
+
+                <div class="flex gap-1">
+                    <button id="btn-add-staff" class="flex-1 border border-gray-300 bg-white hover:bg-gray-100 py-1 rounded text-xs transition">+ Melodia</button>
+                    <button id="btn-add-perc" class="flex-1 border border-gray-300 bg-white hover:bg-gray-100 py-1 rounded text-xs transition">+ Percussão</button>
+                </div>
+                <button id="btn-remove-staff" class="w-full border border-red-200 text-red-600 bg-red-50 hover:bg-red-100 py-1 rounded text-xs transition hidden">Remover Atual</button>
+            </div>
+
+            <div class="palette-header">📏 Extensão</div>
+            <div class="palette-content">
+                <div class="flex gap-1">
+                    <button id="btn-add-measure" class="flex-1 border border-gray-300 bg-white hover:bg-gray-100 py-1 rounded text-xs transition font-semibold text-blue-700">+ 1 Compasso</button>
+                    <button id="btn-add-4-measures" class="flex-1 border border-gray-300 bg-white hover:bg-gray-100 py-1 rounded text-xs transition font-semibold text-blue-700">+ 4 Compassos</button>
+                </div>
+            </div>
+
+            <div class="palette-header">📝 Propriedades</div>
+            <div class="palette-content">
+                <div>
+                    <label class="block text-[10px] text-gray-500 uppercase mb-1">Título</label>
+                    <input type="text" id="song-title" value="Nova Partitura" class="w-full p-1.5 border border-gray-300 rounded text-xs bg-white">
+                </div>
+                <div>
+                    <label class="block text-[10px] text-gray-500 uppercase mb-1">Compositor</label>
+                    <input type="text" id="song-composer" value="Músico" class="w-full p-1.5 border border-gray-300 rounded text-xs bg-white">
+                </div>
+                <div class="pt-2">
+                    <label class="flex justify-between text-[10px] text-gray-500 uppercase mb-1">
+                        <span>Andamento (BPM)</span>
+                        <span id="bpm-val" class="font-bold text-gray-700">100</span>
+                    </label>
+                    <input type="range" id="bpm-slider" min="40" max="240" value="100" class="w-full">
+                </div>
+            </div>
+
+            <div class="palette-header">🎵 Armadura e Clave</div>
+            <div class="palette-content">
+                <div>
+                    <label class="block text-[10px] text-gray-500 uppercase mb-1">Tonalidade Global</label>
+                    <select id="key-signature" class="w-full p-1.5 border border-gray-300 rounded text-xs bg-white">
+                        <option value="C">Dó Maior / Lá menor</option>
+                        <option value="G">Sol Maior (1♯)</option>
+                        <option value="D">Ré Maior (2♯)</option>
+                        <option value="A">Lá Maior (3♯)</option>
+                        <option value="E">Mi Maior (4♯)</option>
+                        <option value="F">Fá Maior (1♭)</option>
+                        <option value="Bb">Si♭ Maior (2♭)</option>
+                        <option value="Eb">Mi♭ Maior (3♭)</option>
+                        <option value="Ab">Lá♭ Maior (4♭)</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-[10px] text-gray-500 uppercase mb-1">Clave da Pauta Atual</label>
+                    <select id="clef-type" class="w-full p-1.5 border border-gray-300 rounded text-xs bg-white">
+                        <option value="treble">Sol (Agudos)</option>
+                        <option value="bass">Fá (Graves)</option>
+                        <option value="alto">Dó (3ª linha - Viola)</option>
+                        <option value="tenor">Dó (4ª linha)</option>
+                        <option value="perc" disabled>Percussão</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="palette-header">⏱ Fórmulas de Compasso</div>
+            <div class="palette-content">
+                <select id="time-signature" class="w-full p-1.5 border border-gray-300 rounded text-xs bg-white">
+                    <option value="4/4">4/4 (Quaternário)</option>
+                    <option value="3/4">3/4 (Ternário)</option>
+                    <option value="2/4">2/4 (Binário)</option>
+                    <option value="6/8">6/8 (Composto)</option>
+                </select>
+                <p class="text-[10px] text-gray-400 mt-1 leading-tight">Nota: Alterar o compasso limpará a partitura atual para manter a consistência matemática.</p>
+            </div>
+        </aside>
+
+        <main class="flex-1 overflow-auto flex justify-center relative pb-20">
+            <div class="paper" id="score-paper"></div>
+        </main>
+    </div>
+
+    <footer class="bg-gray-100 border-t border-gray-300 flex justify-between items-center px-4 py-1.5 text-xs text-gray-600 z-20">
+        <div class="flex items-center gap-4">
+            <span class="font-medium text-gray-800">Pronto</span>
+            <div class="w-px h-3 bg-gray-400"></div>
+            <span id="status-staff-name">Pauta: Melodia 1</span>
+        </div>
+        <div class="flex items-center gap-2">
+            <span class="font-mono" id="measure-text">0 / 4 Tempos</span>
+            <div class="w-24 bg-gray-300 h-1.5 rounded-full overflow-hidden">
+                <div id="measure-fill" class="bg-blue-500 h-full transition-all duration-300" style="width: 0%"></div>
+            </div>
+        </div>
+    </footer>
+
+    <textarea id="hidden-abc" class="hidden"></textarea>
+    <input type="file" id="file-upload" accept=".json" class="hidden">
+
+    <script>
+    // ─── CLASSE STAFF ────────────────────────────────────────────────────────────
+    class Staff {
+        constructor(id, type = 'standard') {
+            this.id = id;
+            this.type = type;
+            this.name = type === 'percussion' ? `Percussão ${id}` : `Melodia ${id}`;
+            this.composition = [];
+            this.clef = type === 'percussion' ? 'perc' : 'treble';
+            this.selectedIndex = -1;
+            this.selectionAnchor = -1;
+            this.currentOctave = 0;
+        }
+
+        // BUG FIX: método estático para hidratar objetos carregados do JSON
+        static hydrate(plain) {
+            const s = new Staff(plain.id, plain.type);
+            s.name = plain.name;
+            s.composition = plain.composition || [];
+            s.clef = plain.clef;
+            s.selectedIndex = plain.selectedIndex !== undefined ? plain.selectedIndex : -1;
+            s.selectionAnchor = plain.selectionAnchor !== undefined ? plain.selectionAnchor : -1;
+            s.currentOctave = plain.currentOctave !== undefined ? plain.currentOctave : 0;
+            return s;
+        }
+    }
+
+    // ─── ESTADO ──────────────────────────────────────────────────────────────────
+    let currentDuration = 3;
+    let synthControl = null;
+    let lastVisualObj = null; // BUG FIX: mantém referência para o player
+
+    let staffs = [new Staff(1, 'standard')];
+    let activeStaffId = 1;
+    let nextStaffId = 2;
+    let currentTargetParsedIndices = [];
+    let totalSystemMeasures = 8;
+
+    let currentTitle = "Nova Partitura";
+    let currentComposer = "Músico";
+    let currentKey = 'C';
+    let currentTimeSignature = '4/4';
+    let currentBPM = 100;
+
+    let beatsPerMeasure = 4;
+    let beatUnit = 4;
+    let ticksPerMeasure = 64;
+    let ticksForBeaming = 16;
+    let ticksPerVisualBeat = 16;
+
+    // ─── DICIONÁRIOS ─────────────────────────────────────────────────────────────
+    // BUG FIX: durMap corrigido — colcheia usa "/2" em L:1/4, seminínima não usa sufixo
+    const durMap     = { 1: "4", 2: "2", 3: "", 4: "/2", 5: "/4", 6: "/8", 7: "/16" };
+    const durTicks   = { 1: 64, 2: 32, 3: 16, 4: 8, 5: 4, 6: 2, 7: 1 };
+    const accMap     = { 0: "__", 1: "_", 2: "=", 3: "", 4: "^", 5: "^^" };
+    const basePitches = { 'c':0,'d':2,'e':4,'f':5,'g':7,'a':9,'b':11 };
+    const accOffsets  = { 0:-2, 1:-1, 2:0, 3:0, 4:1, 5:2 };
+
+    // ─── HELPERS ─────────────────────────────────────────────────────────────────
+    function getActiveStaff() { return staffs.find(s => s.id === activeStaffId); }
+
+    function updateTimeSignatureMath() {
+        const parts = currentTimeSignature.split('/');
+        beatsPerMeasure = parseInt(parts[0]);
+        beatUnit = parseInt(parts[1]);
+        ticksPerMeasure = (beatsPerMeasure / beatUnit) * 64;
+        ticksPerVisualBeat = 64 / beatUnit;
+        ticksForBeaming = (currentTimeSignature === '6/8') ? 24 : 16;
+    }
+
+    function showToast(message) {
+        const toast = document.getElementById('toast');
+        document.getElementById('toast-msg').innerText = message;
+        toast.classList.remove('toast-exit');
+        toast.classList.add('toast-enter');
+        clearTimeout(toast._timer);
+        toast._timer = setTimeout(() => {
+            toast.classList.remove('toast-enter');
+            toast.classList.add('toast-exit');
+        }, 3000);
+    }
+
+    // BUG FIX: getAbcPitch — oitava negativa usava vírgulas invertidas
+    // ABC notation: C, = uma oitava abaixo; C,, = duas oitavas abaixo
+    // oitava 0 → C (oitava central, médio para treble)
+    // oitava 1 → c (uma acima)
+    // oitava 2 → c' (duas acima)
+    // oitava -1 → C, (uma abaixo)
+    // oitava -2 → C,, (duas abaixo)
+    function getAbcPitch(item, measureAccidentals) {
+        if (item.note === "0") return "z";
+
+        let base = item.note.toUpperCase();
+        let pitch = "";
+
+        if (item.octave === 0)       pitch = base;
+        else if (item.octave === 1)  pitch = base.toLowerCase();
+        else if (item.octave >= 2)   pitch = base.toLowerCase() + "'".repeat(item.octave - 1);
+        else if (item.octave === -1) pitch = base + ",";
+        else if (item.octave <= -2)  pitch = base + ",".repeat(Math.abs(item.octave));
+
+        let acc = accMap[item.accidentalIndex] !== undefined ? accMap[item.accidentalIndex] : "";
+
+        if (measureAccidentals) {
+            const noteKey = item.note + item.octave;
+            if (item.accidentalIndex === 3) {
+                // Se a nota é natural mas houve acidente diferente no mesmo compasso, força bequadro
+                if (measureAccidentals[noteKey] !== undefined && measureAccidentals[noteKey] !== 3) {
+                    acc = "=";
+                }
+            }
+            measureAccidentals[noteKey] = item.accidentalIndex;
+        }
+
+        return acc + pitch;
+    }
+
+    function getTicksInCurrentMeasure() {
+        const staff = getActiveStaff();
+        if (!staff) return 0;
+        const totalTicks = staff.composition.reduce((a, i) => a + i.ticks, 0);
+        return totalTicks % ticksPerMeasure;
+    }
+
+    // BUG FIX: removido o setTimeout de flash que causava race condition
+    function updateMeasureUI() {
+        const staff = getActiveStaff();
+        if (!staff) return;
+
+        const totalTicks = staff.composition.reduce((a, i) => a + i.ticks, 0);
+        const currentTicks = totalTicks % ticksPerMeasure;
+        const beatsFilled = currentTicks / ticksPerVisualBeat;
+        const percent = (currentTicks / ticksPerMeasure) * 100;
+        const fillEl = document.getElementById('measure-fill');
+        const textEl = document.getElementById('measure-text');
+
+        // Compasso exatamente cheio
+        if (currentTicks === 0 && totalTicks > 0) {
+            fillEl.style.width = '100%';
+            fillEl.classList.add('bg-green-500');
+            fillEl.classList.remove('bg-blue-500');
+            textEl.innerText = `Compasso Cheio`;
+        } else {
+            fillEl.style.width = `${percent}%`;
+            fillEl.classList.add('bg-blue-500');
+            fillEl.classList.remove('bg-green-500');
+            textEl.innerText = `${beatsFilled} / ${beatsPerMeasure} Tps`;
+        }
+
+        document.getElementById('status-staff-name').innerText = `Pauta: ${staff.name}`;
+    }
+
+    function updateOctaveDisplay() {
+        const staff = getActiveStaff();
+        const display = document.getElementById('octave-display');
+        if (!staff) return;
+        if (staff.currentOctave === 0)      display.innerText = "Nrml";
+        else if (staff.currentOctave > 0)   display.innerText = `+${staff.currentOctave}`;
+        else                                 display.innerText = `${staff.currentOctave}`;
+    }
+
+    function updateStaffUI() {
+        const selector = document.getElementById('staff-selector');
+        selector.innerHTML = staffs.map(s => `<option value="${s.id}">${s.name}</option>`).join('');
+        selector.value = activeStaffId;
+
+        const active = getActiveStaff();
+        document.getElementById('staff-name-input').value = active.name;
+
+        const clefSelect = document.getElementById('clef-type');
+        clefSelect.value = active.clef;
+        clefSelect.disabled = (active.type === 'percussion');
+
+        document.getElementById('btn-remove-staff').classList.toggle('hidden', staffs.length <= 1);
+
+        updateOctaveDisplay();
+        updateMeasureUI();
+    }
+
+    // ─── GERAÇÃO DO STRING ABC ────────────────────────────────────────────────────
+    const getAbcDur = (ticks) => {
+        const gcd = (a, b) => b ? gcd(b, a % b) : a;
+        let d = gcd(ticks, 16);
+        let n = ticks / d;
+        let den = 16 / d;
+        if (den === 1) return n === 1 ? "" : n.toString();
+        return n + "/" + den;
+    };
+
+    function buildAbcString() {
+        let qStr = "1/4";
+        if (currentTimeSignature === '6/8') qStr = "3/8";
+        else if (beatUnit === 2) qStr = "1/2";
+
+        const scoreStr = staffs.map(s => s.id).join(' ');
+
+        let abc = `X:1\nT:${currentTitle}\nC:${currentComposer}\nM:${currentTimeSignature}\nL:1/4\nQ:${qStr}=${currentBPM}\nK:${currentKey}\n%%score ${scoreStr}\n`;
+
+        for (let s of staffs) {
+            abc += `V:${s.id} clef=${s.clef} name="${s.name}"\n`;
+            if (s.type === 'percussion') abc += `%%MIDI channel 10\n`;
+        }
+
+        const MEASURES_PER_SYSTEM = 4;
+        let actualMaxMeasures = 0;
+
+        // BUG FIX: não mutamos os objetos originais — guardamos _originalIndex num mapa separado
+        let staffData = staffs.map(s => {
+            let measures = [];
+            let currentMeasure = [];
+            let acc = 0;
+            for (let i = 0; i < s.composition.length; i++) {
+                let item = { ...s.composition[i], _originalIndex: i }; // cópia rasa, sem mutar o original
+                currentMeasure.push(item);
+                acc += item.ticks;
+                if (acc === ticksPerMeasure) {
+                    measures.push(currentMeasure);
+                    currentMeasure = [];
+                    acc = 0;
+                }
+            }
+            if (currentMeasure.length > 0) measures.push(currentMeasure);
+            if (measures.length > actualMaxMeasures) actualMaxMeasures = measures.length;
+            return { staff: s, measures };
+        });
+
+        if (actualMaxMeasures > totalSystemMeasures) totalSystemMeasures = actualMaxMeasures;
+
+        let maxMeasures = totalSystemMeasures;
+        let systemsCount = Math.max(1, Math.ceil(maxMeasures / MEASURES_PER_SYSTEM));
+
+        let parsedNoteIndex = 0;
+        currentTargetParsedIndices = [];
+
+        for (let sys = 0; sys < systemsCount; sys++) {
+            for (let data of staffData) {
+                abc += `V:${data.staff.id}\n`;
+                let voiceStr = "";
+
+                for (let m = 0; m < MEASURES_PER_SYSTEM; m++) {
+                    let measureIndex = sys * MEASURES_PER_SYSTEM + m;
+                    if (measureIndex >= maxMeasures) break;
+
+                    let barline = (measureIndex === maxMeasures - 1) ? " |]" : " | ";
+
+                    if (measureIndex < data.measures.length) {
+                        let measureNotes = data.measures[measureIndex];
+                        let accTicks = 0;
+                        let measureAccidentals = {};
+
+                        // BUG FIX: cálculo correto do intervalo de seleção (garante min ≤ max)
+                        const selIdx = data.staff.selectedIndex;
+                        const ancIdx = data.staff.selectionAnchor !== -1 ? data.staff.selectionAnchor : selIdx;
+                        const minSel = Math.min(selIdx, ancIdx);
+                        const maxSel = Math.max(selIdx, ancIdx);
+
+                        for (let i = 0; i < measureNotes.length; i++) {
+                            let item = measureNotes[i];
+                            let pitchStr = getAbcPitch(item, measureAccidentals);
+                            let durStr = durMap[item.dur] !== undefined ? durMap[item.dur] : "";
+
+                            voiceStr += pitchStr + durStr;
+                            accTicks += item.ticks;
+
+                            if (data.staff.id === activeStaffId) {
+                                if (item._originalIndex >= minSel && item._originalIndex <= maxSel && selIdx >= 0) {
+                                    currentTargetParsedIndices.push(parsedNoteIndex);
+                                }
+                            }
+                            parsedNoteIndex++;
+
+                            if (accTicks % ticksForBeaming === 0 && i < measureNotes.length - 1) {
+                                voiceStr += " ";
+                            }
+                        }
+
+                        if (accTicks < ticksPerMeasure) {
+                            voiceStr += "z" + getAbcDur(ticksPerMeasure - accTicks);
+                        }
+
+                        voiceStr += barline;
+                    } else {
+                        voiceStr += "z" + getAbcDur(ticksPerMeasure) + barline;
+                    }
+                }
+                abc += voiceStr + "\n";
+            }
+        }
+        return abc;
+    }
+
+    // ─── RENDERIZAÇÃO ─────────────────────────────────────────────────────────────
+    function updateScore() {
+        const abcString = buildAbcString();
+        document.getElementById('hidden-abc').value = abcString;
+
+        const visualObj = ABCJS.renderAbc("score-paper", abcString, {
+            responsive: "resize",
+            add_classes: true,
+            paddingtop: 30,
+            paddingbottom: 30
+        });
+
+        lastVisualObj = visualObj; // BUG FIX: guarda referência global
+
+        highlightSelection();
+        initAudio(visualObj);
+    }
+
+    // BUG FIX: inicialização de áudio separada e idempotente
+    function initAudio(visualObj) {
+        if (!ABCJS.synth.supportsAudio()) return;
+        if (!visualObj || !visualObj[0]) return;
+
+        if (!synthControl) {
+            synthControl = new ABCJS.synth.SynthController();
+            synthControl.load("#audio-controls", null, {
+                displayLoop: false, displayRestart: false,
+                displayPlay: true, displayProgress: false
+            });
+        }
+
+        const createSynth = new ABCJS.synth.CreateSynth();
+        createSynth.init({ visualObj: visualObj[0] }).then(() => {
+            synthControl.setTune(visualObj[0], false);
+        }).catch(err => {
+            console.warn("Erro ao inicializar áudio:", err);
+        });
+    }
+
+    function highlightSelection() {
+        document.querySelectorAll('.highlighted-note').forEach(el => el.classList.remove('highlighted-note'));
+        currentTargetParsedIndices.forEach(idx => {
+            document.querySelectorAll(`#score-paper .abcjs-n${idx}`)
+                    .forEach(el => el.classList.add('highlighted-note'));
+        });
+    }
+
+    // ─── LÓGICA MUSICAL ───────────────────────────────────────────────────────────
+    function moveSelection(delta, isShiftPressed = false) {
+        const staff = getActiveStaff();
+        if (staff.composition.length === 0) return;
+
+        // BUG FIX: inicializa selectedIndex se ainda for -1
+        if (staff.selectedIndex === -1) {
+            staff.selectedIndex = delta > 0 ? 0 : staff.composition.length - 1;
+            staff.selectionAnchor = staff.selectedIndex;
+            updateScore();
+            return;
+        }
+
+        if (!isShiftPressed) {
+            staff.selectedIndex = Math.max(0, Math.min(staff.composition.length - 1, staff.selectedIndex + delta));
+            staff.selectionAnchor = staff.selectedIndex;
+        } else {
+            if (staff.selectionAnchor === -1) staff.selectionAnchor = staff.selectedIndex;
+            staff.selectedIndex = Math.max(0, Math.min(staff.composition.length - 1, staff.selectedIndex + delta));
+        }
+
+        updateScore();
+        simulateBtnPress(delta > 0 ? '#btn-sel-next' : '#btn-sel-prev');
+    }
+
+    function transposeSelectedNote(delta) {
+        const staff = getActiveStaff();
+        if (staff.selectedIndex < 0 || staff.selectedIndex >= staff.composition.length) return;
+
+        const ancIdx = staff.selectionAnchor !== -1 ? staff.selectionAnchor : staff.selectedIndex;
+        const minSel = Math.min(staff.selectedIndex, ancIdx);
+        const maxSel = Math.max(staff.selectedIndex, ancIdx);
+
+        for (let i = minSel; i <= maxSel; i++) {
+            let item = staff.composition[i];
+            if (item.note === "0") continue;
+
+            let baseVal = basePitches[item.note] || 0;
+            let accOffset = accOffsets[item.accidentalIndex] || 0;
+            let absolutePitch = baseVal + (item.octave * 12) + accOffset + delta;
+
+            // BUG FIX: clamp antes do módulo para evitar resultados negativos incorretos
+            let newOctave = Math.floor(absolutePitch / 12);
+            newOctave = Math.max(-2, Math.min(3, newOctave));
+
+            let semitone = ((absolutePitch % 12) + 12) % 12;
+
+            let noteMap = {
+                0:  ['c',3], 1:  delta>0?['c',4]:['d',1],
+                2:  ['d',3], 3:  delta>0?['d',4]:['e',1],
+                4:  ['e',3], 5:  ['f',3],
+                6:  delta>0?['f',4]:['g',1], 7: ['g',3],
+                8:  delta>0?['g',4]:['a',1], 9: ['a',3],
+                10: delta>0?['a',4]:['b',1], 11:['b',3]
+            };
+
+            let [newNote, newAcc] = noteMap[semitone] || ['c', 3];
+            item.note = newNote;
+            item.octave = newOctave;
+            item.accidentalIndex = newAcc;
+        }
+
+        updateScore();
+        simulateBtnPress(delta > 0 ? '#btn-acc-up' : '#btn-acc-down');
+    }
+
+    function addNote(noteLetter) {
+        const staff = getActiveStaff();
+        const noteTicks = durTicks[currentDuration];
+        const currentTicksInMeasure = getTicksInCurrentMeasure();
+
+        if (currentTicksInMeasure + noteTicks > ticksPerMeasure) {
+            const remaining = (ticksPerMeasure - currentTicksInMeasure) / ticksPerVisualBeat;
+            showToast(`Espaço insuficiente! Restam ${remaining} tempo(s).`);
+            simulateBtnPress(`[data-note="${noteLetter}"]`, true);
+            return;
+        }
+
+        staff.composition.push({
+            note: noteLetter,
+            octave: staff.currentOctave,
+            dur: currentDuration,
+            ticks: noteTicks,
+            accidentalIndex: 3
+        });
+
+        staff.selectedIndex = staff.composition.length - 1;
+        staff.selectionAnchor = staff.selectedIndex;
+
+        updateScore();
+        updateMeasureUI();
+        simulateBtnPress(`[data-note="${noteLetter}"]`);
+    }
+
+    function setDuration(durVal) {
+        if (durVal < 1 || durVal > 7) return;
+        currentDuration = durVal;
+        document.querySelectorAll('[data-dur]').forEach(btn => btn.classList.remove('selected'));
+        const btn = document.querySelector(`[data-dur="${durVal}"]`);
+        if (btn) btn.classList.add('selected');
+    }
+
+    // BUG FIX: changeOctave dividida em duas responsabilidades:
+    //   1. Muda a oitava de entrada (currentOctave do staff)
+    //   2. Se há seleção ativa, transpõe as notas selecionadas pela oitava
+    function changeOctave(delta) {
+        if (delta === 0) return; // BUG FIX: delta=0 não faz nada
+
+        const staff = getActiveStaff();
+        staff.currentOctave = Math.max(-2, Math.min(3, staff.currentOctave + delta));
+        updateOctaveDisplay();
+        simulateBtnPress(delta > 0 ? '#btn-oct-up' : '#btn-oct-down');
+
+        // Transpõe as notas selecionadas, se existirem
+        if (staff.selectedIndex >= 0 && staff.selectedIndex < staff.composition.length) {
+            const ancIdx = staff.selectionAnchor !== -1 ? staff.selectionAnchor : staff.selectedIndex;
+            const minSel = Math.min(staff.selectedIndex, ancIdx);
+            const maxSel = Math.max(staff.selectedIndex, ancIdx);
+
+            for (let i = minSel; i <= maxSel; i++) {
+                const item = staff.composition[i];
+                if (item.note !== "0") {
+                    item.octave = Math.max(-2, Math.min(3, item.octave + delta));
+                }
+            }
+            updateScore();
+        }
+    }
+
+    // BUG FIX: resetOctave separado para uso no clearAll/newScore/updateStaffUI
+    function resetOctave() {
+        const staff = getActiveStaff();
+        if (!staff) return;
+        staff.currentOctave = 0;
+        updateOctaveDisplay();
+    }
+
+    function deleteNote() {
+        const staff = getActiveStaff();
+        if (staff.composition.length === 0 || staff.selectedIndex === -1) return;
+
+        const ancIdx = staff.selectionAnchor !== -1 ? staff.selectionAnchor : staff.selectedIndex;
+        const minSel = Math.min(staff.selectedIndex, ancIdx);
+        const maxSel = Math.max(staff.selectedIndex, ancIdx);
+
+        const allPauses = staff.composition.slice(minSel, maxSel + 1).every(n => n.note === "0");
+
+        if (!allPauses) {
+            // Primeiro passo: transforma em pausas
+            for (let i = minSel; i <= maxSel; i++) {
+                staff.composition[i].note = "0";
+                staff.composition[i].accidentalIndex = 3;
+            }
+        } else {
+            // Segundo passo: remove definitivamente
+            staff.composition.splice(minSel, maxSel - minSel + 1);
+            staff.selectedIndex = staff.composition.length > 0 ? Math.max(0, minSel - 1) : -1;
+            staff.selectionAnchor = staff.selectedIndex;
+        }
+
+        updateScore();
+        updateMeasureUI();
+        simulateBtnPress('#btn-undo');
+    }
+
+    function clearAll() {
+        const staff = getActiveStaff();
+        staff.composition = [];
+        staff.selectedIndex = -1;
+        staff.selectionAnchor = -1;
+        staff.currentOctave = 0;
+        setDuration(3);
+        updateOctaveDisplay();
+        updateScore();
+        updateMeasureUI();
+    }
+
+    function newScore() {
+        currentTitle = "Nova Partitura";
+        currentComposer = "Músico";
+        currentKey = 'C';
+        currentTimeSignature = '4/4';
+        currentBPM = 100;
+        totalSystemMeasures = 8;
+
+        staffs = [new Staff(1, 'standard')];
+        activeStaffId = 1;
+        nextStaffId = 2;
+        synthControl = null; // BUG FIX: força reinicialização do player
+
+        document.getElementById('score-paper').innerHTML = '';
+        document.getElementById('audio-controls').innerHTML = '';
+
+        document.getElementById('song-title').value = currentTitle;
+        document.getElementById('song-composer').value = currentComposer;
+        document.getElementById('key-signature').value = currentKey;
+        document.getElementById('time-signature').value = currentTimeSignature;
+        document.getElementById('bpm-slider').value = currentBPM;
+        document.getElementById('bpm-val').innerText = currentBPM;
+        document.getElementById('header-time-sig').innerText = currentTimeSignature;
+
+        updateTimeSignatureMath();
+        updateStaffUI();
+        updateScore();
+        updateMeasureUI();
+        showToast("Nova partitura criada!");
+    }
+
+    function saveScore() {
+        const data = {
+            title: currentTitle, composer: currentComposer,
+            key: currentKey, timeSignature: currentTimeSignature,
+            bpm: currentBPM, totalSystemMeasures,
+            staffs, activeStaffId, nextStaffId
+        };
+        const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(data));
+        const a = document.createElement('a');
+        a.setAttribute("href", dataStr);
+        a.setAttribute("download", (currentTitle || "partitura").replace(/\s+/g, '_') + ".json");
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        showToast("Projeto salvo com sucesso!");
+    }
+
+    function exportHtml() {
+        const abcString = buildAbcString();
+        const safeTitle = currentTitle || "Partitura";
+
+        const htmlContent = `<!DOCTYPE html>
+<html lang="pt-PT">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>${safeTitle} - Partitura Interativa</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/abcjs/6.2.2/abcjs-basic-min.js"><\/script>
+    <link rel="stylesheet" type="text/css" href="https://cdnjs.cloudflare.com/ajax/libs/abcjs/6.2.2/abcjs-audio.min.css">
+    <style>
+        body { font-family: 'Segoe UI', sans-serif; background:#f0f2f5; margin:0; padding:20px; display:flex; flex-direction:column; align-items:center; }
+        .container { background:white; padding:30px; border-radius:8px; box-shadow:0 4px 15px rgba(0,0,0,.1); width:100%; max-width:21cm; }
+        .audio-container { margin-bottom:30px; display:flex; justify-content:center; background:#f8fafc; padding:15px; border-radius:8px; border:1px solid #e2e8f0; }
+        @media print { body{background:white;padding:0} .container{box-shadow:none;max-width:none;width:100%;padding:0} .audio-container{display:none} }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="audio-container" id="audio-controls"></div>
+        <div id="score-paper"></div>
+    </div>
+    <script>
+        const abcString = \`${abcString.replace(/`/g, '\\`')}\`;
+        const visualObj = ABCJS.renderAbc("score-paper", abcString, { responsive:"resize", add_classes:true, paddingtop:15, paddingbottom:15 });
+        if (ABCJS.synth.supportsAudio()) {
+            const sc = new ABCJS.synth.SynthController();
+            sc.load("#audio-controls", null, { displayLoop:true, displayRestart:true, displayPlay:true, displayProgress:true });
+            new ABCJS.synth.CreateSynth().init({ visualObj: visualObj[0] }).then(() => sc.setTune(visualObj[0], false));
+        }
+    <\/script>
+</body>
+</html>`;
+
+        const blob = new Blob([htmlContent], { type: 'text/html' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = safeTitle.replace(/\s+/g, '_') + "_Player.html";
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        showToast("Partitura exportada como HTML executável!");
+    }
+
+    function simulateBtnPress(selector, isError = false) {
+        const btn = document.querySelector(selector);
+        if (!btn) return;
+        if (isError) {
+            btn.style.backgroundColor = '#fca5a5';
+            setTimeout(() => { btn.style.backgroundColor = ''; }, 200);
+        } else {
+            btn.classList.add('active-simulated');
+            setTimeout(() => btn.classList.remove('active-simulated'), 150);
+        }
+    }
+
+    // ─── LISTENERS ───────────────────────────────────────────────────────────────
+    window.addEventListener('keydown', (e) => {
+        if (['INPUT', 'TEXTAREA', 'SELECT'].includes(e.target.tagName)) return;
+        const key = e.key.toLowerCase();
+
+        if (key === ' ') { e.preventDefault(); document.getElementById('btn-play').click(); }
+        else if (key >= '1' && key <= '7') setDuration(parseInt(key));
+        else if (['a','b','c','d','e','f','g','0'].includes(key)) addNote(key);
+        else if (e.key === 'ArrowUp')    { e.preventDefault(); (e.ctrlKey||e.metaKey) ? changeOctave(1)  : transposeSelectedNote(1); }
+        else if (e.key === 'ArrowDown')  { e.preventDefault(); (e.ctrlKey||e.metaKey) ? changeOctave(-1) : transposeSelectedNote(-1); }
+        else if (e.key === 'ArrowLeft')  { e.preventDefault(); moveSelection(-1, e.shiftKey); }
+        else if (e.key === 'ArrowRight') { e.preventDefault(); moveSelection(1, e.shiftKey); }
+        else if (e.key === 'Backspace' || e.key === 'Delete') { e.preventDefault(); deleteNote(); }
+    });
+
+    document.querySelectorAll('[data-dur]').forEach(b => b.addEventListener('click', e => setDuration(parseInt(e.currentTarget.dataset.dur))));
+    document.querySelectorAll('.note-btn').forEach(b => b.addEventListener('click', e => addNote(e.currentTarget.dataset.note)));
+
+    document.getElementById('btn-sel-prev').addEventListener('click', () => moveSelection(-1));
+    document.getElementById('btn-sel-next').addEventListener('click', () => moveSelection(1));
+    document.getElementById('btn-acc-down').addEventListener('click', () => transposeSelectedNote(-1));
+    document.getElementById('btn-acc-up').addEventListener('click', () => transposeSelectedNote(1));
+    document.getElementById('btn-oct-up').addEventListener('click', () => changeOctave(1));
+    document.getElementById('btn-oct-down').addEventListener('click', () => changeOctave(-1));
+    document.getElementById('btn-undo').addEventListener('click', deleteNote);
+    document.getElementById('btn-clear').addEventListener('click', clearAll);
+    document.getElementById('btn-new').addEventListener('click', newScore);
+    document.getElementById('btn-save').addEventListener('click', saveScore);
+    document.getElementById('btn-export-html').addEventListener('click', exportHtml);
+
+    document.getElementById('btn-play').addEventListener('click', () => {
+        // BUG FIX: tenta clicar no botão gerado pelo ABCJS; mostra aviso útil se não existir
+        const playBtn = document.querySelector('.abcjs-inline-audio .abcjs-play, .abcjs-play');
+        if (playBtn) {
+            playBtn.click();
+        } else if (lastVisualObj && lastVisualObj[0]) {
+            // Tenta reinicializar e aguarda
+            initAudio(lastVisualObj);
+            setTimeout(() => {
+                const btn = document.querySelector('.abcjs-play');
+                if (btn) btn.click();
+                else showToast("Aguarde um momento e tente de novo.");
+            }, 500);
+        } else {
+            showToast("Adicione notas para poder tocar a música!");
+        }
+    });
+
+    document.getElementById('btn-open').addEventListener('click', () => document.getElementById('file-upload').click());
+
+    document.getElementById('file-upload').addEventListener('change', (event) => {
+        const file = event.target.files[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            try {
+                const data = JSON.parse(e.target.result);
+                currentTitle = data.title || "Nova Partitura";
+                currentComposer = data.composer || "Músico";
+                currentKey = data.key || "C";
+                currentTimeSignature = data.timeSignature || "4/4";
+                currentBPM = data.bpm || 100;
+                totalSystemMeasures = data.totalSystemMeasures || 8;
+
+                // BUG FIX CRÍTICO: rehidrata os objetos Staff para restaurar propriedades da classe
+                staffs = (data.staffs || [new Staff(1, 'standard')]).map(plain => Staff.hydrate(plain));
+                activeStaffId = data.activeStaffId || staffs[0].id;
+                nextStaffId = data.nextStaffId || 2;
+
+                // Reseta o player
+                synthControl = null;
+                document.getElementById('audio-controls').innerHTML = '';
+
+                document.getElementById('song-title').value = currentTitle;
+                document.getElementById('song-composer').value = currentComposer;
+                document.getElementById('key-signature').value = currentKey;
+                document.getElementById('time-signature').value = currentTimeSignature;
+                document.getElementById('bpm-slider').value = currentBPM;
+                document.getElementById('bpm-val').innerText = currentBPM;
+                document.getElementById('header-time-sig').innerText = currentTimeSignature;
+
+                updateTimeSignatureMath();
+                updateStaffUI();
+                updateScore();
+                updateMeasureUI();
+                showToast("Partitura carregada com sucesso!");
+            } catch (err) {
+                showToast("Erro ao ler o ficheiro. Formato inválido.");
+            }
+        };
+        reader.readAsText(file);
+        event.target.value = '';
+    });
+
+    document.getElementById('staff-selector').addEventListener('change', e => {
+        activeStaffId = parseInt(e.target.value);
+        updateStaffUI();
+        updateScore();
+    });
+
+    document.getElementById('btn-add-staff').addEventListener('click', () => {
+        const s = new Staff(nextStaffId++, 'standard');
+        staffs.push(s);
+        activeStaffId = s.id;
+        updateStaffUI();
+        updateScore();
+    });
+
+    document.getElementById('btn-add-perc').addEventListener('click', () => {
+        const s = new Staff(nextStaffId++, 'percussion');
+        staffs.push(s);
+        activeStaffId = s.id;
+        updateStaffUI();
+        updateScore();
+    });
+
+    document.getElementById('btn-remove-staff').addEventListener('click', () => {
+        if (staffs.length > 1) {
+            staffs = staffs.filter(s => s.id !== activeStaffId);
+            activeStaffId = staffs[0].id;
+            updateStaffUI();
+            updateScore();
+        }
+    });
+
+    document.getElementById('staff-name-input').addEventListener('input', (e) => {
+        const staff = getActiveStaff();
+        if (!staff) return;
+        staff.name = e.target.value;
+        const opt = document.querySelector(`#staff-selector option[value="${staff.id}"]`);
+        if (opt) opt.innerText = staff.name;
+        document.getElementById('status-staff-name').innerText = `Pauta: ${staff.name}`;
+    });
+
+    document.getElementById('staff-name-input').addEventListener('change', () => updateScore());
+
+    document.getElementById('btn-add-measure').addEventListener('click', () => { totalSystemMeasures++; updateScore(); });
+    document.getElementById('btn-add-4-measures').addEventListener('click', () => { totalSystemMeasures += 4; updateScore(); });
+
+    document.getElementById('song-title').addEventListener('input', e => currentTitle = e.target.value);
+    document.getElementById('song-title').addEventListener('change', () => updateScore());
+    document.getElementById('song-composer').addEventListener('input', e => currentComposer = e.target.value);
+    document.getElementById('song-composer').addEventListener('change', () => updateScore());
+
+    document.getElementById('key-signature').addEventListener('change', e => { currentKey = e.target.value; updateScore(); });
+    document.getElementById('clef-type').addEventListener('change', e => { getActiveStaff().clef = e.target.value; updateScore(); });
+
+    document.getElementById('time-signature').addEventListener('change', e => {
+        if (staffs.some(s => s.composition.length > 0)) {
+            staffs.forEach(s => s.composition = []);
+            showToast("Pautas limpas devido à alteração de compasso.");
+        }
+        currentTimeSignature = e.target.value;
+        document.getElementById('header-time-sig').innerText = currentTimeSignature;
+        updateTimeSignatureMath();
+        updateScore();
+        updateMeasureUI();
+    });
+
+    document.getElementById('bpm-slider').addEventListener('input', e => {
+        currentBPM = e.target.value;
+        document.getElementById('bpm-val').innerText = currentBPM;
+    });
+    document.getElementById('bpm-slider').addEventListener('change', () => updateScore());
+
+    // ─── INIT ────────────────────────────────────────────────────────────────────
+    updateTimeSignatureMath();
+    updateStaffUI();
+    updateScore();
+    updateMeasureUI();
+    </script>
+</body>
+</html>
